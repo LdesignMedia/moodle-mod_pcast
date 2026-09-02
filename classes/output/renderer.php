@@ -22,7 +22,7 @@ use plugin_renderer_base;
  * Class actionbar - Display the action bar
  *
  * @package   mod_pcast
- * @copyright 2021 Stephen Bouorget
+ * @copyright 2021 Stephen Bourget
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class renderer extends plugin_renderer_base {
