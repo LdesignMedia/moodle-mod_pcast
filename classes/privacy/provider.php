@@ -88,6 +88,8 @@ class provider implements
             [
                 'userid' => 'privacy:metadata:pcast_views:userid',
                 'episodeid' => 'privacy:metadata:pcast_views:episodeid',
+                'views' => 'privacy:metadata:pcast_views:views',
+                'lastview' => 'privacy:metadata:pcast_views:lastview',
             ],
             'privacy:metadata:pcast_views'
         );
@@ -233,6 +235,7 @@ class provider implements
                        pe.keywords,
                        pe.timecreated,
                        pe.timemodified,
+                       pv.id AS viewrowid,
                        pv.views,
                        pv.lastview
                   FROM {pcast_episodes} pe
@@ -348,7 +351,7 @@ class provider implements
             ];
 
             // A view row belongs to the viewer, so only this user's own counter is exported.
-            if (!is_null($record->views)) {
+            if (!is_null($record->viewrowid)) {
                 $episodedata['views'] = $record->views;
                 $episodedata['lastview'] = \core_privacy\local\request\transform::datetime($record->lastview);
             }
@@ -457,8 +460,12 @@ class provider implements
 
                 $episodes = $DB->get_records('pcast_episodes', ['pcastid' => $instanceid, 'userid' => $userid]);
                 foreach ($episodes as $episode) {
-                    // The episode itself is deleted below, so its remaining view counters go with it.
+                    // The episode itself is deleted below, so everything hanging off it goes with it.
                     $DB->delete_records('pcast_views', ['episodeid' => $episode->id]);
+                    $DB->delete_records(
+                        'comments',
+                        ['itemid' => $episode->id, 'commentarea' => 'pcast_episode', 'contextid' => $context->id]
+                    );
 
                     // Delete tags.
                     \core_tag\privacy\provider::delete_item_tags($context, 'mod_pcast', 'pcast_episodes', $episode->id);
@@ -518,8 +525,14 @@ class provider implements
 
         [$insql, $inparams] = $DB->get_in_or_equal($episodes, SQL_PARAMS_NAMED);
 
-        // The episodes themselves are deleted below, so their remaining view counters go with them.
+        // The episodes themselves are deleted below, so everything hanging off them goes with them.
         $DB->delete_records_list('pcast_views', 'episodeid', $episodes);
+        $commentswhere = "contextid = :contextid AND commentarea = :commentarea AND itemid {$insql}";
+        $DB->delete_records_select(
+            'comments',
+            $commentswhere,
+            $inparams + ['contextid' => $context->id, 'commentarea' => 'pcast_episode']
+        );
 
         // Delete related episode and attachment files.
         get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'episode', $insql, $inparams);

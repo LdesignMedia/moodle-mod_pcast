@@ -1024,6 +1024,8 @@ function pcast_reset_userdata($data) {
             "itemid IN ($allepisodessql) AND commentarea=?",
             [$data->courseid, 'pcast_episode']
         );
+        // Delete the view counters first; once the episodes are gone they can no longer be found.
+        $DB->delete_records_select('pcast_views', "episodeid IN ($allepisodessql)", [$data->courseid]);
         $DB->delete_records_select('pcast_episodes', "pcastid IN ($allpcastssql)", [$data->courseid]);
 
         // Now get rid of all attachments.
