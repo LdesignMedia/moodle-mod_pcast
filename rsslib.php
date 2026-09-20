@@ -121,9 +121,6 @@ function pcast_rss_get_feed($context, $args) {
         }
         $items = [];
 
-        $formatoptions = new stdClass();
-        $formatoptions->trusttext = true;
-
         foreach ($recs as $rec) {
             $item = new stdClass();
             $item->title = $rec->episodename;
@@ -154,16 +151,16 @@ function pcast_rss_get_feed($context, $args) {
             );
             $item->description = format_text(
                 $item->description,
-                'HTML',
-                ['context' => $context, 'trusted' => true]
+                $rec->episodesummaryformat,
+                ['context' => $context, 'trusted' => $rec->summarytrust]
             );
 
             if ($pcast->userscancategorize) {
                 // TODO: This is very inefficient (this generates 2 DB queries per entry).
                 $category = pcast_rss_category_lookup($rec);
-                if (!empty($item->topcategory)) {
+                if (!empty($rec->topcategory) && isset($category->top->name)) {
                     $item->topcategory = $category->top->name;
-                    if (!empty($item->nestedcategory)) {
+                    if (!empty($rec->nestedcategory) && isset($category->nested->name)) {
                         $item->nestedcategory = $category->nested->name;
                     }
                 }
@@ -235,6 +232,8 @@ function pcast_rss_get_sql($pcast, $time = 0) {
                   e.pcastid AS pcastid,
                   e.name AS episodename,
                   e.summary AS episodesummary,
+                  e.summaryformat AS episodesummaryformat,
+                  e.summarytrust AS summarytrust,
                   e.mediafile AS mediafile,
                   e.duration AS duration,
                   e.subtitle AS subtitle,
@@ -259,6 +258,8 @@ function pcast_rss_get_sql($pcast, $time = 0) {
                   e.pcastid AS pcastid,
                   e.name AS episodename,
                   e.summary AS episodesummary,
+                  e.summaryformat AS episodesummaryformat,
+                  e.summarytrust AS summarytrust,
                   e.mediafile AS mediafile,
                   e.duration AS duration,
                   e.subtitle AS subtitle,
@@ -330,7 +331,12 @@ function pcast_rss_category_lookup($pcast) {
     $category = new stdClass();
     // TODO: We should use MUC here to make prevent multiple queries.
     $category->top = $DB->get_record('pcast_itunes_categories', ["id" => $pcast->topcategory], '*', true);
-    $category->nested = $DB->get_record('pcast_itunes_nested_cat', ["id" => $pcast->nestedcategory], '*', true);
+    $category->nested = $DB->get_record(
+        'pcast_itunes_nested_cat',
+        ["id" => $pcast->nestedcategory, "topcategoryid" => $pcast->topcategory],
+        '*',
+        true
+    );
     return $category;
 }
 
@@ -396,7 +402,7 @@ function pcast_rss_header($title = null, $link = null, $description = null, $pca
             $result .= rss_full_tag('language', 2, false, substr($USER->lang, 0, 2));
         }
         $today = getdate();
-        $result .= rss_full_tag('copyright', 2, false, '&#169; ' . $today['year'] . ' ' . format_string($site->fullname));
+        $result .= rss_full_tag('copyright', 2, false, "\u{00A9} " . $today['year'] . ' ' . format_string($site->fullname));
         $result .= rss_full_tag('lastBuildDate', 2, false, gmdate('D, d M Y H:i:s', $today[0]) . ' GMT');
         $result .= rss_full_tag('pubDate', 2, false, gmdate('D, d M Y H:i:s', $today[0]) . ' GMT');
 
@@ -467,14 +473,14 @@ function pcast_rss_header($title = null, $link = null, $description = null, $pca
 
             // Categories.
             if (isset($categories->top->name)) {
-                $result .= rss_start_tag('itunes:category text="' . $categories->top->name . '"', 2, true);
+                $result .= rss_start_tag('itunes:category text="' . s($categories->top->name) . '"', 2, true);
                 if (isset($categories->nested->name)) {
-                    $result .= rss_start_tag('itunes:category text="' . $categories->nested->name . '"/', 4, true);
+                    $result .= rss_start_tag('itunes:category text="' . s($categories->nested->name) . '"/', 4, true);
                 }
                 $result .= rss_end_tag('itunes:category', 2, true);
             }
             // Image.
-            $result .= rss_start_tag('itunes:image href="' . $rsspix . '"/', 2, true);
+            $result .= rss_start_tag('itunes:image href="' . s($rsspix) . '"/', 2, true);
         }
     }
 
@@ -510,7 +516,7 @@ function pcast_rss_add_items($context, $items, $itunes = false, $currentgroup = 
             // Only display group members entries in regular courses, Display everything when used on the front page.
             if (
                 (isset($members[$item->userid]->id) && ($members[$item->userid]->id == $item->userid))
-                || ($item->course === SITEID)
+                || ((int)$item->course === (int)SITEID)
             ) {
                 $result .= rss_start_tag('item', 2, true);
                 // Include the category if exists (some rss readers will use it to group items).
@@ -526,7 +532,7 @@ function pcast_rss_add_items($context, $items, $itunes = false, $currentgroup = 
                 $result .= rss_full_tag('pubDate', 3, false, gmdate('D, d M Y H:i:s', $item->pubdate) . ' GMT');  // MDL-12563.
 
                 // Rewrite the URLs for the description fields.
-                if ($pcastconfig->allowhtmlinsummary) {
+                if (!empty($pcastconfig->allowhtmlinsummary)) {
                     // Re-write the url paths to be valid.
                     $description = file_rewrite_pluginfile_urls(
                         $item->description,
@@ -609,7 +615,8 @@ function pcast_rss_add_enclosure($item) {
         }
     }
 
-    return 'enclosure url="' . $enclosure->url . '" length="' . $enclosure->size . '" type ="' . $enclosure->type . '" /';
+    return 'enclosure url="' . s($enclosure->url) . '" length="' . s($enclosure->size) .
+        '" type ="' . s($enclosure->type) . '" /';
 }
 
 /**
@@ -680,7 +687,7 @@ function pcast_build_pcast_file($pcast, $url) {
     if (isset($category->nested->name) && !empty($category->nested->name)) {
         $result .= rss_full_tag('category', 2, false, $category->nested->name);
     }
-    if (isset($pcast->subtitle) && !empty($category->subtitle)) {
+    if (!empty($pcast->subtitle)) {
         $result .= rss_full_tag('subtitle', 2, false, $pcast->subtitle);
     }
     $result .= rss_end_tag('channel', 1, true);
