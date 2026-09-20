@@ -54,7 +54,9 @@ if ($id) {
     $course     = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
     // The episode must belong to this pcast instance, otherwise a user with the capability in their own
     // course could delete an episode belonging to any other course by passing a foreign episode id.
-    $episode    = $DB->get_record('pcast_episodes', ['id' => $episode, 'pcastid' => $cm->instance], '*', MUST_EXIST);
+    if (!$episode = $DB->get_record('pcast_episodes', ['id' => $episode, 'pcastid' => $cm->instance])) {
+        throw new moodle_exception('invalidentry', 'pcast');
+    }
     $pcast      = $DB->get_record('pcast', ['id' => $cm->instance], '*', MUST_EXIST);
 } else {
     throw new moodle_exception('invalidcmorid', 'pcast');
