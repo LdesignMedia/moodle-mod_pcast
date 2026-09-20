@@ -392,7 +392,11 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
-     * Test that a full episode reset clears the episodes and both file areas.
+     * Test that a full episode reset clears the episodes, both file areas and the view counters.
+     *
+     * Regression test: the reset deleted the episodes but never their rows in pcast_views, and the
+     * separate 'delete all views' checkbox is disabled whenever 'reset all' is ticked, so every
+     * counter was orphaned, still holding the userid of whoever had listened.
      */
     public function test_pcast_reset_userdata_all(): void {
         global $DB;
@@ -417,9 +421,18 @@ final class lib_test extends \advanced_testcase {
             ], 'media');
         }
 
+        $viewer = $this->getDataGenerator()->create_user();
+        $DB->insert_record('pcast_views', (object) [
+            'episodeid' => $episode->id,
+            'userid' => $viewer->id,
+            'views' => 4,
+            'lastview' => time(),
+        ]);
+
         pcast_reset_userdata((object) ['courseid' => $course->id, 'reset_pcast_all' => 1]);
 
         $this->assertEquals(0, $DB->count_records('pcast_episodes', ['pcastid' => $pcast->id]));
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
         $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
         $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
     }
@@ -434,7 +447,12 @@ final class lib_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $manager = get_string_manager();
-        foreach (['nopcasts', 'databaseerror', 'errdeltimeexpired', 'notapproved'] as $identifier) {
+        $identifiers = [
+            'nopcasts', 'databaseerror', 'errdeltimeexpired', 'notapproved',
+            // Declared by the privacy provider, so they are rendered on the site's data registry.
+            'privacy:metadata:pcast_views:views', 'privacy:metadata:pcast_views:lastview',
+        ];
+        foreach ($identifiers as $identifier) {
             $this->assertTrue(
                 $manager->string_exists($identifier, 'mod_pcast'),
                 "The string '{$identifier}' is used by mod_pcast but is not defined."
