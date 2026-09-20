@@ -214,18 +214,21 @@ class provider implements
                        pe.timemodified
                   FROM {pcast_episodes} pe
                   JOIN {pcast} p ON pe.pcastid = p.id
-                  JOIN {course_modules} cm ON p.id = cm.instance
-                  JOIN {context} c ON cm.id = c.instanceid
+                  JOIN {modules} m ON m.name = :modname
+                  JOIN {course_modules} cm ON p.id = cm.instance AND cm.module = m.id
+                  JOIN {context} c ON cm.id = c.instanceid AND c.contextlevel = :contextlevel
                  WHERE c.id {$contextsql}
-                   AND pe.userid = :userid
-             OR EXISTS (SELECT 1 FROM {comments} com WHERE com.commentarea = :commentarea AND com.itemid = pe.id
-                        AND com.userid = :commentuserid)
-             OR EXISTS (SELECT 1 FROM {rating} r WHERE r.contextid = c.id AND r.itemid  = pe.id
-                        AND r.component = :ratingcomponent
-                   AND r.ratingarea = :ratingarea
-                   AND r.userid = :ratinguserid)
+                   AND (pe.userid = :userid
+                        OR EXISTS (SELECT 1 FROM {comments} com WHERE com.commentarea = :commentarea
+                                   AND com.itemid = pe.id AND com.userid = :commentuserid)
+                        OR EXISTS (SELECT 1 FROM {rating} r WHERE r.contextid = c.id AND r.itemid = pe.id
+                                   AND r.component = :ratingcomponent
+                                   AND r.ratingarea = :ratingarea
+                                   AND r.userid = :ratinguserid))
                ORDER BY pe.id, cm.id";
         $params = [
+            'modname' => 'pcast',
+            'contextlevel' => CONTEXT_MODULE,
             'userid' => $user->id,
             'commentarea' => 'pcast_episode',
             'commentuserid' => $user->id,
@@ -263,7 +266,7 @@ class provider implements
                 writer::with_context($context)->rewrite_pluginfile_urls(
                     $path,
                     'mod_pcast',
-                    'episode',
+                    'summary',
                     $record->episodeid,
                     $record->summary
                 ),
@@ -276,7 +279,7 @@ class provider implements
                 writer::with_context($context)->export_area_files($path, 'mod_pcast', 'episode', $record->episodeid);
 
                 // Get all files attached to the pcast attachment.
-                writer::with_context($context)->export_area_files($path, 'mod_pcast', 'mediafile', $record->episodeid);
+                writer::with_context($context)->export_area_files($path, 'mod_pcast', 'summary', $record->episodeid);
             }
 
             // Export associated comments.
@@ -365,13 +368,8 @@ class provider implements
             return;
         }
 
-        $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-        $DB->record_exists('pcast', ['id' => $context->instanceid]);
-        $DB->delete_records('pcast_episodes', ['pcastid' => $instanceid]);
-
         if ($context->contextlevel == CONTEXT_MODULE) {
             $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-            $DB->record_exists('pcast', ['id' => $context->instanceid]);
 
             $episodes = $DB->get_records('pcast_episodes', ['pcastid' => $instanceid]);
             foreach ($episodes as $episode) {
@@ -381,7 +379,7 @@ class provider implements
 
             // Delete episode and attachment files.
             get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'episode');
-            get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'mediafile');
+            get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'summary');
 
             // Delete related ratings.
             \core_rating\privacy\provider::delete_ratings($context, 'mod_pcast', 'episode');
@@ -425,7 +423,7 @@ class provider implements
 
                     // Delete episode and attachment files.
                     get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
-                    get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'mediafile', $episode->id);
+                    get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
 
                     // Delete related ratings.
                     \core_rating\privacy\provider::delete_ratings($context, 'mod_pcast', 'episode', $episode->id);
@@ -474,11 +472,10 @@ class provider implements
         $DB->delete_records_list('pcast_views', 'episodeid', $episodes);
 
         // Delete related episode categories.
-        $DB->delete_records_list('pcast_episodes_categories', 'episodeid', $episodes);
 
         // Delete related episode and attachment files.
         get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'episode', $insql, $inparams);
-        get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'mediafile', $insql, $inparams);
+        get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'summary', $insql, $inparams);
 
         // Delete user tags related to this pcast.
         \core_tag\privacy\provider::delete_item_tags_select($context, 'mod_pcast', 'pcast_episodes', $insql, $inparams);

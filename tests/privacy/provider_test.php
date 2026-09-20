@@ -279,6 +279,91 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * Test deleting data for a set of users in a context.
+     *
+     * Regression test: this path used to delete from pcast_episodes_categories, a table that does
+     * not exist, so it threw before comments, ratings, files or episodes were removed.
+     */
+    public function test_delete_data_for_users(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+
+        $this->assertEquals(1, $DB->count_records(
+            'pcast_episodes',
+            ['pcastid' => $this->pcast->id, 'userid' => $this->student->id]
+        ));
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_pcast', [$this->student->id]);
+        provider::delete_data_for_users($userlist);
+
+        $this->assertEquals(0, $DB->count_records(
+            'pcast_episodes',
+            ['pcastid' => $this->pcast->id, 'userid' => $this->student->id]
+        ));
+    }
+
+    /**
+     * Test that purging a context also removes the episode view counters.
+     *
+     * Regression test: the episodes were deleted before the loop that used them to find the view
+     * rows, so the rows in pcast_views survived the purge.
+     */
+    public function test_delete_data_for_all_users_in_context_removes_views(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $this->pcast->id], '*', MUST_EXIST);
+
+        $DB->insert_record('pcast_views', (object) [
+            'episodeid' => $episode->id,
+            'userid' => $this->student->id,
+            'views' => 3,
+            'lastview' => time(),
+        ]);
+        $this->assertEquals(1, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
+
+        provider::delete_data_for_all_users_in_context($context);
+
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
+    }
+
+    /**
+     * Test that purging a context removes files from both of the per-episode file areas.
+     *
+     * Regression test: the deletion targeted a 'mediafile' area, which does not exist. mediafile is
+     * a column of pcast_episodes; the real areas are logo, episode and summary. Files embedded in
+     * an episode summary therefore survived erasure.
+     */
+    public function test_delete_data_for_all_users_in_context_removes_summary_files(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $this->pcast->id], '*', MUST_EXIST);
+
+        $fs = get_file_storage();
+        foreach (['episode', 'summary'] as $area) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_pcast',
+                'filearea' => $area,
+                'itemid' => $episode->id,
+                'filepath' => '/',
+                'filename' => $area . '.txt',
+            ], 'file content');
+        }
+        $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
+
+        provider::delete_data_for_all_users_in_context($context);
+
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
+    }
+
+    /**
      * Get the comment area for pcast module.
      *
      * @param context $context The context.
