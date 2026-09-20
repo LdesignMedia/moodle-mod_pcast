@@ -530,41 +530,6 @@ function pcast_print_recent_activity($course, $viewfullnames, $timestart) {
 }
 
 /**
- * Function to be run periodically according to the moodle cron
- * This function searches for things that need to be done, such
- * as sending out mail, toggling flags etc ...
- *
- * @return boolean
- **/
-function pcast_cron() {
-    return true;
-}
-
-/**
- * This function returns if a scale is being used by one pcast
- * if it has support for grading and scales. Commented code should be
- * modified if necessary. See forum, glossary or journal modules
- * as reference.
- *
- * @param int $pcastid ID of an instance of this module
- * @param int $scaleid
- * @return mixed
- */
-function pcast_scale_used($pcastid, $scaleid) {
-    global $DB;
-
-    $return = false;
-
-    $rec = $DB->get_record("pcast", ["id" => "$pcastid", "scale" => "-$scaleid"]);
-
-    if (!empty($rec) && !empty($scaleid)) {
-        $return = true;
-    }
-
-    return $return;
-}
-
-/**
  * Checks if scale is being used by any instance of pcast.
  * This function was added in 1.9
  *
@@ -581,7 +546,6 @@ function pcast_scale_used_anywhere($scaleid) {
         return false;
     }
 }
-
 
 /**
  * Lists all browsable file areas
@@ -623,43 +587,6 @@ function pcast_get_post_actions() {
  */
 function pcast_is_moddata_trusted() {
     return false;
-}
-
-/**
- * Obtains the automatic completion state for this pcast based on any conditions
- * in pcast settings.
- *
- * @param object $course Course
- * @param object $cm Course-module
- * @param int $userid User ID
- * @param bool $type Type of comparison (or/and; can be used as return value if no conditions)
- * @return bool True if completed, false if not. (If no conditions, then return
- *   value depends on comparison type)
- */
-function pcast_get_completion_state($course, $cm, $userid, $type) {
-    global $DB;
-
-    // Get pcast details.
-    if (!($pcast = $DB->get_record('pcast', ['id' => $cm->instance]))) {
-        throw new Exception("Can't find podcast {$cm->instance}");
-    }
-
-    // Default return value.
-    $result = $type;
-
-    if ($pcast->completionepisodes) {
-        $value = $pcast->completionepisodes <= $DB->count_records(
-            'pcast_episodes',
-            ['pcastid' => $pcast->id, 'userid' => $userid, 'approved' => PCAST_EPISODE_APPROVE]
-        );
-        if ($type == COMPLETION_AND) {
-            $result = $result && $value;
-        } else {
-            $result = $result || $value;
-        }
-    }
-
-    return $result;
 }
 
 /**
@@ -804,7 +731,6 @@ function pcast_get_itunes_categories($item, $pcast) {
     }
     return $item;
 }
-
 
  /**
   * File browsing support for pcast module.
@@ -1409,7 +1335,6 @@ function pcast_rating_permissions($contextid, $component, $ratingarea) {
         ];
     }
 }
-
 
 /**
  * Validates a submitted rating

@@ -222,4 +222,38 @@ final class rsslib_test extends \advanced_testcase {
         $this->assertNotFalse($document, 'The feed must parse as XML.');
         $this->assertSame([], $errors, 'The feed must not contain XML errors.');
     }
+
+    /**
+     * Test that the explicit flag is published the way the form labels it.
+     *
+     * Note: this pins the feed contract rather than the fix itself. The defect was in the form
+     * labels, which a unit test cannot observe: the select labelled 0 as 'Yes' while the feed
+     * publishes 0 as 'no', so a podcast marked explicit was published as not explicit. The labels
+     * were corrected to match this mapping, so this test guards against the mapping being changed
+     * instead, which would flip the meaning of every stored row.
+     */
+    public function test_rss_publishes_explicit_flag_matching_the_form(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        [$pcast, , $context] = $this->create_rss_podcast();
+        $DB->set_field('pcast', 'enablerssitunes', 1, ['id' => $pcast->id]);
+
+        foreach ([0 => 'no', 1 => 'yes', 2 => 'clean'] as $stored => $expected) {
+            $DB->set_field('pcast', 'explicit', $stored, ['id' => $pcast->id]);
+            pcast_rss_delete_file($DB->get_record('pcast', ['id' => $pcast->id], '*', MUST_EXIST));
+
+            $token = rss_get_token($USER->id);
+            $path = pcast_rss_get_feed($context, [$context->id, $token, 'mod_pcast', $pcast->id, 0]);
+            $xml = file_get_contents($path);
+
+            $this->assertStringContainsString(
+                '<itunes:explicit>' . $expected . '</itunes:explicit>',
+                $xml,
+                "Stored value {$stored} should publish as {$expected}."
+            );
+        }
+    }
 }
