@@ -411,7 +411,6 @@ class provider implements
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel == CONTEXT_MODULE) {
                 $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-                $DB->record_exists('pcast', ['id' => $context->instanceid]);
 
                 $episodes = $DB->get_records('pcast_episodes', ['pcastid' => $instanceid, 'userid' => $userid]);
                 foreach ($episodes as $episode) {
@@ -470,8 +469,6 @@ class provider implements
 
         // Delete related episode views.
         $DB->delete_records_list('pcast_views', 'episodeid', $episodes);
-
-        // Delete related episode categories.
 
         // Delete related episode and attachment files.
         get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'episode', $insql, $inparams);

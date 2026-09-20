@@ -279,6 +279,44 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * Test that exporting one context does not leak episodes from another.
+     *
+     * Regression test: AND bound tighter than OR in the export query, so the comment and rating
+     * EXISTS branches ignored the context restriction entirely. A user who had merely commented
+     * on an episode elsewhere got that other activity exported too.
+     */
+    public function test_export_for_context_does_not_leak_other_contexts(): void {
+        $cm1 = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context1 = \context_module::instance($cm1->id);
+
+        // A second pcast, in a second course, that the student only comments on.
+        $course2 = $this->getDataGenerator()->create_course();
+        $pcast2 = $this->plugingenerator->create_instance(['course' => $course2->id]);
+        $cm2 = get_coursemodule_from_instance('pcast', $pcast2->id);
+        $context2 = \context_module::instance($cm2->id);
+
+        $this->setUser($this->teacher);
+        $episode2 = $this->plugingenerator->create_content($pcast2, ['name' => 'Other course episode',
+            'approved' => 1, ]);
+
+        $this->setUser($this->student);
+        $comment = $this->get_comment_object($context2, $episode2->id);
+        $comment->add('Commented in another course');
+
+        // Export only the first context.
+        $contextlist = new \core_privacy\local\request\approved_contextlist(
+            $this->student,
+            'mod_pcast',
+            [$context1->id]
+        );
+        provider::export_user_data($contextlist);
+
+        // The second context must not have been written to.
+        $writer2 = \core_privacy\local\request\writer::with_context($context2);
+        $this->assertFalse($writer2->has_any_data());
+    }
+
+    /**
      * Test deleting data for a set of users in a context.
      *
      * Regression test: this path used to delete from pcast_episodes_categories, a table that does
