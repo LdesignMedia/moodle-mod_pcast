@@ -828,7 +828,9 @@ function mod_pcast_get_file_info($browser, $areas, $course, $cm, $context, $file
     }
 
     if ($filearea === 'summary' || $filearea === 'episode' || $filearea === 'logo') {
-        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $itemid])) {
+        // Scope the episode to this pcast instance, as pcast_pluginfile() does, so the approval check below
+        // cannot compare this $pcast against an episode belonging to another instance.
+        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $itemid, 'pcastid' => $cm->instance])) {
             return null;
         }
 
@@ -890,7 +892,9 @@ function pcast_pluginfile($course, $cm, $context, $filearea, $args, $forcedownlo
     if ($filearea === 'episode' || $filearea === 'summary') {
         $episodeid = (int)array_shift($args);
 
-        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $episodeid])) {
+        // Scope the episode to this pcast instance. Without this the approval check below compared a $pcast
+        // taken from the course module against an $episode that need not belong to it.
+        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $episodeid, 'pcastid' => $cm->instance])) {
             return false;
         }
 

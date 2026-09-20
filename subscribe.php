@@ -172,7 +172,6 @@ if (!$status) {
 
 // Check that file exists.
 if (empty($cachedfilepath) || !file_exists($cachedfilepath)) {
-    die($cachedfilepath);
     pcast_rss_error();
 }
 
