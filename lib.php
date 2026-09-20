@@ -890,7 +890,9 @@ function pcast_pluginfile($course, $cm, $context, $filearea, $args, $forcedownlo
     if ($filearea === 'episode' || $filearea === 'summary') {
         $episodeid = (int)array_shift($args);
 
-        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $episodeid])) {
+        // Scope the episode to this pcast instance. Without this the approval check below compared a $pcast
+        // taken from the course module against an $episode that need not belong to it.
+        if (!$episode = $DB->get_record('pcast_episodes', ['id' => $episodeid, 'pcastid' => $cm->instance])) {
             return false;
         }
 

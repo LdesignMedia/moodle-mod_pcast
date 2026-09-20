@@ -52,7 +52,9 @@ $episodedeleted  = get_string("episodedeleted", "pcast");
 if ($id) {
     $cm         = get_coursemodule_from_id('pcast', $id, 0, false, MUST_EXIST);
     $course     = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
-    $episode    = $DB->get_record('pcast_episodes', ['id' => $episode], '*', MUST_EXIST);
+    // The episode must belong to this pcast instance, otherwise a user with the capability in their own
+    // course could delete an episode belonging to any other course by passing a foreign episode id.
+    $episode    = $DB->get_record('pcast_episodes', ['id' => $episode, 'pcastid' => $cm->instance], '*', MUST_EXIST);
     $pcast      = $DB->get_record('pcast', ['id' => $cm->instance], '*', MUST_EXIST);
 } else {
     throw new moodle_exception('invalidcmorid', 'pcast');
@@ -80,7 +82,10 @@ if ($confirm && confirm_sesskey()) {
     // The operation was confirmed.
     $origionalepisode = fullclone($episode);
     $fs = get_file_storage();
-    $fs->delete_area_files($context->id, 'pcast_episode', $episode->id);
+    // Note the argument order is (contextid, component, filearea, itemid). Passing 'pcast_episode' as the
+    // component deleted nothing, so every deleted episode used to leave its files behind.
+    $fs->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
+    $fs->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
     $DB->delete_records("comments", ['itemid' => $episode->id, 'commentarea' => 'pcast_episode', 'contextid' => $context->id]);
     $DB->delete_records("pcast_episodes", ["id" => $episode->id]);
 
