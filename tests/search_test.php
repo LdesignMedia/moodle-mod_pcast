@@ -38,7 +38,7 @@ require_once($CFG->dirroot . '/mod/pcast/tests/generator/lib.php');
  * @copyright  2016 Stephen Bourget
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class mod_pcast_search_testcase extends \advanced_testcase {
+final class search_test extends \advanced_testcase {
     /**
      * @var string Area id
      */
@@ -52,7 +52,7 @@ class mod_pcast_search_testcase extends \advanced_testcase {
         set_config('enableglobalsearch', true);
 
         // Set \core_search::instance to the mock_search_engine as we don't require the search engine to be working to test this.
-        $search = \testable_core_search::instance();
+        \testable_core_search::instance();
 
         $this->episodeareaid = \core_search\manager::generate_areaid('mod_pcast', 'episode');
     }

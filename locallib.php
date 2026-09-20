@@ -403,10 +403,18 @@ function pcast_print_sorting_links($cm, $mode, $sortkey = '', $sortorder = '', $
 
             // Hyperlinks.
             $link1 = html_writer::tag('a', $strsortlastupdate, ['href' => $url1, 'title' => $strsortlastupdate . ' ' . $asc]);
-            $link2 = html_writer::tag('a', $strsortcreation . $icon, ['href' => $url2, 'title' => $strsortcreation . ' ' . $strchangeto]);
+            $link2 = html_writer::tag(
+                'a',
+                $strsortcreation . $icon,
+                ['href' => $url2, 'title' => $strsortcreation . ' ' . $strchangeto]
+            );
 
             // Output.
-            $html = html_writer::tag('span', get_string('current', 'pcast', $strsortcreation . ' ' . $currentorder), ['class' => 'accesshide']);
+            $html = html_writer::tag(
+                'span',
+                get_string('current', 'pcast', $strsortcreation . ' ' . $currentorder),
+                ['class' => 'accesshide']
+            );
             $html .= $strsortby . $strsep;
             $html .= $link1 . ' | ';
             $html .= html_writer::tag('span', $link2, ['class' => 'pcast-bold']);
@@ -721,7 +729,15 @@ function pcast_display_category_episodes($pcast, $cm, $groupmode = 0, $hook = PC
  * @param string $sortorder
  * @param int $page
  */
-function pcast_display_date_episodes($pcast, $cm, $groupmode = 0, $hook = '', $sortkey = PCAST_DATE_CREATED, $sortorder = 'desc', $page = 0) {
+function pcast_display_date_episodes(
+    $pcast,
+    $cm,
+    $groupmode = 0,
+    $hook = '',
+    $sortkey = PCAST_DATE_CREATED,
+    $sortorder = 'desc',
+    $page = 0
+) {
     global $DB, $USER;
 
     $context = context_module::instance($cm->id);

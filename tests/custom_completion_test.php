@@ -42,8 +42,8 @@ require_once($CFG->libdir . '/completionlib.php');
  * @package   mod_pcast
  * @copyright 2021 Stephen Bourget
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers    \mod_pcast\completion\custom_completion
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(custom_completion::class)]
 final class custom_completion_test extends advanced_testcase {
     /**
      * Data provider for get_state().
@@ -70,7 +70,6 @@ final class custom_completion_test extends advanced_testcase {
     /**
      * Test for get_state().
      *
-     * @dataProvider get_state_provider
      * @param string $rule The custom completion rule.
      * @param int $available Whether this rule is available.
      * @param int $episodes The number of episodes.
@@ -78,6 +77,7 @@ final class custom_completion_test extends advanced_testcase {
      * @param string|null $exception Expected exception.
      *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_state_provider')]
     public function test_get_state(string $rule, int $available, int $episodes, ?int $status, ?string $exception): void {
         global $DB;
 
@@ -101,10 +101,10 @@ final class custom_completion_test extends advanced_testcase {
         // Mock the return of the magic getter method when fetching the cm_info object's customdata and instance values.
         $mockcminfo->expects($this->any())
             ->method('__get')
-            ->will($this->returnValueMap([
+            ->willReturnMap([
                 ['customdata', $customdataval],
                 ['instance', 1],
-            ]));
+            ]);
 
         // Mock the DB calls.
         $DB = $this->createMock(get_class($DB));
@@ -191,11 +191,11 @@ final class custom_completion_test extends advanced_testcase {
     /**
      * Test for get_available_custom_rules().
      *
-     * @dataProvider get_available_custom_rules_provider
      * @param int $status
      * @param array $expected
      *
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_available_custom_rules_provider')]
     public function test_get_available_custom_rules(int $status, array $expected): void {
         $customdataval = [
             'customcompletionrules' => [

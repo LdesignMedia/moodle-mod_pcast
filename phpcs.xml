@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<ruleset name="mod_pcast">
+    <description>Moodle coding standard for mod_pcast.</description>
+
+    <file>.</file>
+
+    <exclude-pattern>lib/getid3/*</exclude-pattern>
+    <exclude-pattern>nbproject/*</exclude-pattern>
+
+    <rule ref="moodle"/>
+
+    <!--
+        moodle.Commenting.TodoComment requires every TODO to reference an MDL-xxxxx issue in the
+        Moodle core tracker. This plugin tracks its work in GitHub issues instead, so the
+        requirement is switched off here rather than deleting the TODO markers, which would hide
+        known technical debt from IDEs and static analysis.
+    -->
+    <rule ref="moodle.Commenting.TodoComment">
+        <properties>
+            <property name="commentRequiredRegex" value=""/>
+        </properties>
+    </rule>
+</ruleset>
