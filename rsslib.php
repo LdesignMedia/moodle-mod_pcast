@@ -159,7 +159,7 @@ function pcast_rss_get_feed($context, $args) {
             );
 
             if ($pcast->userscancategorize) {
-                // Note: this is inefficient - it generates 2 DB queries per entry.
+                // TODO: This is very inefficient (this generates 2 DB queries per entry).
                 $category = pcast_rss_category_lookup($rec);
                 if (!empty($item->topcategory)) {
                     $item->topcategory = $category->top->name;
@@ -328,7 +328,7 @@ function pcast_rss_author_lookup($userid) {
 function pcast_rss_category_lookup($pcast) {
     global $DB;
     $category = new stdClass();
-    // Note: MUC could be used here to prevent multiple queries.
+    // TODO: We should use MUC here to make prevent multiple queries.
     $category->top = $DB->get_record('pcast_itunes_categories', ["id" => $pcast->topcategory], '*', true);
     $category->nested = $DB->get_record('pcast_itunes_nested_cat', ["id" => $pcast->nestedcategory], '*', true);
     return $category;

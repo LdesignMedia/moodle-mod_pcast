@@ -132,8 +132,8 @@ function pcast_print_author_menu($cm, $pcast, $mode, $hook, $sortkey = '', $sort
 
 /**
  * Prints the category menu
- * Note: this should use html_writer::tag().
- * Note: these styles should not be hard coded.
+ * @todo This should use html_writer::tag()
+ * @todo These styles should not be hard coded
  * @param object $cm
  * @param object $pcast
  * @param string $hook
@@ -188,7 +188,7 @@ function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGOR
         if ($category->nestedcategory == 0) {
             echo $menu[(int)$hook];
         } else {
-            // Note: this should be moved to a lang string.
+            // TODO: convert to lang file later.
             echo $menu[(int)$category->topcategory * 1000] . ': ' . $menu[(int)$hook];
         }
     }
@@ -1629,7 +1629,7 @@ function pcast_get_supported_file_types($pcast) {
 
 /**
  * Helper function, builds an array of categories.
- * Note: results could be cached using MUC.
+ * @todo cache results using MUC.
  * @return array
  */
 function pcast_get_categories() {

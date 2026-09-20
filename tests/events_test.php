@@ -34,7 +34,7 @@ namespace mod_pcast;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  *
  */
-class events_test extends \advanced_testcase {
+final class events_test extends \advanced_testcase {
     /**
      * Setup test.
      */
@@ -233,6 +233,11 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_created', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $this->assertEquals(
+            new \moodle_url('/mod/pcast/showepisode.php', ['eid' => $episode->id]),
+            $event->get_url()
+        );
         $this->assertEventContextNotUsed($event);
     }
 
@@ -270,6 +275,11 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_updated', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $this->assertEquals(
+            new \moodle_url('/mod/pcast/showepisode.php', ['eid' => $episode->id]),
+            $event->get_url()
+        );
         $this->assertEventContextNotUsed($event);
     }
 
@@ -316,6 +326,12 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_deleted', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $expectedurl = new \moodle_url(
+            '/mod/pcast/view.php',
+            ['id' => $pcast->cmid, 'hook' => $hook, 'mode' => $prevmode]
+        );
+        $this->assertEquals($expectedurl, $event->get_url());
         $this->assertEventContextNotUsed($event);
     }
 
@@ -369,6 +385,11 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_approved', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $this->assertEquals(
+            new \moodle_url('/mod/pcast/showepisode.php', ['eid' => $episode->id]),
+            $event->get_url()
+        );
         $this->assertEventContextNotUsed($event);
 
         // Disapprove episode, trigger and validate event.
@@ -394,6 +415,11 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_disapproved', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $this->assertEquals(
+            new \moodle_url('/mod/pcast/showepisode.php', ['eid' => $episode->id]),
+            $event->get_url()
+        );
         $this->assertEventContextNotUsed($event);
     }
 
@@ -428,6 +454,11 @@ class events_test extends \advanced_testcase {
         $this->assertInstanceOf('\mod_pcast\event\episode_viewed', $event);
         $this->assertEquals(CONTEXT_MODULE, $event->contextlevel);
         $this->assertEquals($pcast->cmid, $event->contextinstanceid);
+        $this->assertEquals($episode->id, $event->objectid);
+        $this->assertEquals(
+            new \moodle_url('/mod/pcast/showepisode.php', ['eid' => $episode->id]),
+            $event->get_url()
+        );
         $this->assertEventContextNotUsed($event);
     }
 }
