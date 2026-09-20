@@ -121,9 +121,6 @@ function pcast_rss_get_feed($context, $args) {
         }
         $items = [];
 
-        $formatoptions = new stdClass();
-        $formatoptions->trusttext = true;
-
         foreach ($recs as $rec) {
             $item = new stdClass();
             $item->title = $rec->episodename;
@@ -334,7 +331,12 @@ function pcast_rss_category_lookup($pcast) {
     $category = new stdClass();
     // TODO: We should use MUC here to make prevent multiple queries.
     $category->top = $DB->get_record('pcast_itunes_categories', ["id" => $pcast->topcategory], '*', true);
-    $category->nested = $DB->get_record('pcast_itunes_nested_cat', ["id" => $pcast->nestedcategory], '*', true);
+    $category->nested = $DB->get_record(
+        'pcast_itunes_nested_cat',
+        ["id" => $pcast->nestedcategory, "topcategoryid" => $pcast->topcategory],
+        '*',
+        true
+    );
     return $category;
 }
 
@@ -400,7 +402,7 @@ function pcast_rss_header($title = null, $link = null, $description = null, $pca
             $result .= rss_full_tag('language', 2, false, substr($USER->lang, 0, 2));
         }
         $today = getdate();
-        $result .= rss_full_tag('copyright', 2, false, '&#169; ' . $today['year'] . ' ' . format_string($site->fullname));
+        $result .= rss_full_tag('copyright', 2, false, "\u{00A9} " . $today['year'] . ' ' . format_string($site->fullname));
         $result .= rss_full_tag('lastBuildDate', 2, false, gmdate('D, d M Y H:i:s', $today[0]) . ' GMT');
         $result .= rss_full_tag('pubDate', 2, false, gmdate('D, d M Y H:i:s', $today[0]) . ' GMT');
 
@@ -471,14 +473,14 @@ function pcast_rss_header($title = null, $link = null, $description = null, $pca
 
             // Categories.
             if (isset($categories->top->name)) {
-                $result .= rss_start_tag('itunes:category text="' . $categories->top->name . '"', 2, true);
+                $result .= rss_start_tag('itunes:category text="' . s($categories->top->name) . '"', 2, true);
                 if (isset($categories->nested->name)) {
-                    $result .= rss_start_tag('itunes:category text="' . $categories->nested->name . '"/', 4, true);
+                    $result .= rss_start_tag('itunes:category text="' . s($categories->nested->name) . '"/', 4, true);
                 }
                 $result .= rss_end_tag('itunes:category', 2, true);
             }
             // Image.
-            $result .= rss_start_tag('itunes:image href="' . $rsspix . '"/', 2, true);
+            $result .= rss_start_tag('itunes:image href="' . s($rsspix) . '"/', 2, true);
         }
     }
 
@@ -530,7 +532,7 @@ function pcast_rss_add_items($context, $items, $itunes = false, $currentgroup = 
                 $result .= rss_full_tag('pubDate', 3, false, gmdate('D, d M Y H:i:s', $item->pubdate) . ' GMT');  // MDL-12563.
 
                 // Rewrite the URLs for the description fields.
-                if ($pcastconfig->allowhtmlinsummary) {
+                if (!empty($pcastconfig->allowhtmlinsummary)) {
                     // Re-write the url paths to be valid.
                     $description = file_rewrite_pluginfile_urls(
                         $item->description,
@@ -613,7 +615,8 @@ function pcast_rss_add_enclosure($item) {
         }
     }
 
-    return 'enclosure url="' . $enclosure->url . '" length="' . $enclosure->size . '" type ="' . $enclosure->type . '" /';
+    return 'enclosure url="' . s($enclosure->url) . '" length="' . s($enclosure->size) .
+        '" type ="' . s($enclosure->type) . '" /';
 }
 
 /**

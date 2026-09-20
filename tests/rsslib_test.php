@@ -88,14 +88,20 @@ final class rsslib_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
+        global $DB;
+
         [$pcast] = $this->create_rss_podcast();
         $full = (object) (array) $pcast;
 
         foreach ([0, 1] as $displayauthor) {
             $full->displayauthor = $displayauthor;
-            $sql = pcast_rss_get_sql($full);
-            $this->assertStringContainsString('summaryformat', $sql);
-            $this->assertStringContainsString('summarytrust', $sql);
+            $records = $DB->get_records_sql(pcast_rss_get_sql($full));
+            $record = reset($records);
+
+            $this->assertNotFalse($record, 'The feed query should return the episode.');
+            $this->assertObjectHasProperty('episodesummaryformat', $record);
+            $this->assertObjectHasProperty('summarytrust', $record);
+            $this->assertEquals(FORMAT_HTML, $record->episodesummaryformat);
         }
     }
 
@@ -103,8 +109,8 @@ final class rsslib_test extends \advanced_testcase {
      * Test that an HTML summary is rendered as HTML, and that the episode category is emitted.
      *
      * Regression test: format_text() was called with the string 'HTML', which is not FORMAT_HTML.
-     * Under PHP 8 it matched no case and fell through to FORMAT_MOODLE, which converts newlines
-     * into <br /> and mangled every description. Separately the category guard tested a property
+     * On Moodle 5.x the default branch of that switch throws a coding_exception, so the feed did
+     * not merely render badly, it failed outright. Separately the category guard tested a property
      * that was never set, so no <category> was ever written.
      */
     public function test_rss_feed_renders_html_and_emits_category(): void {
@@ -154,9 +160,15 @@ final class rsslib_test extends \advanced_testcase {
             'description' => 'A front page description',
         ];
 
-        $result = pcast_rss_add_items($context, [$item]);
-
-        $this->assertStringContainsString('Front page episode', $result);
+        foreach ([(string) SITEID, (int) SITEID] as $courseid) {
+            $item->course = $courseid;
+            $result = pcast_rss_add_items($context, [$item]);
+            $this->assertStringContainsString(
+                'Front page episode',
+                $result,
+                'Front page episodes must be included whatever type the course id has.'
+            );
+        }
     }
 
     /**
@@ -174,5 +186,40 @@ final class rsslib_test extends \advanced_testcase {
         $result = pcast_build_pcast_file($pcast, 'https://example.com/feed');
 
         $this->assertStringContainsString('A subtitle for the feed', $result);
+    }
+
+    /**
+     * Test that a feed carrying a category with an ampersand is still well formed XML.
+     *
+     * Regression test: category names were concatenated straight into an XML attribute. Five of
+     * the categories seeded at install contain an ampersand, for example 'Kids & Family', so any
+     * conforming reader rejected the whole document.
+     */
+    public function test_rss_feed_with_ampersand_category_is_valid_xml(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        [$pcast, , $context] = $this->create_rss_podcast();
+
+        // Point the podcast itself at a seeded category containing an ampersand.
+        $arts = $DB->get_record('pcast_itunes_categories', ['name' => 'Kids & Family']);
+        $this->assertNotFalse($arts, 'Expected the seeded category to exist.');
+        $DB->set_field('pcast', 'topcategory', $arts->id, ['id' => $pcast->id]);
+        $DB->set_field('pcast', 'enablerssitunes', 1, ['id' => $pcast->id]);
+
+        $token = rss_get_token($USER->id);
+        $path = pcast_rss_get_feed($context, [$context->id, $token, 'mod_pcast', $pcast->id, 0]);
+        $xml = file_get_contents($path);
+
+        $previous = libxml_use_internal_errors(true);
+        $document = simplexml_load_string($xml);
+        $errors = libxml_get_errors();
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $this->assertNotFalse($document, 'The feed must parse as XML.');
+        $this->assertSame([], $errors, 'The feed must not contain XML errors.');
     }
 }
