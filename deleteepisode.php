@@ -89,6 +89,8 @@ if ($confirm && confirm_sesskey()) {
     $fs->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
     $fs->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
     $DB->delete_records("comments", ['itemid' => $episode->id, 'commentarea' => 'pcast_episode', 'contextid' => $context->id]);
+    // The view counters belong to the users who listened, so they go with the episode.
+    $DB->delete_records("pcast_views", ["episodeid" => $episode->id]);
     $DB->delete_records("pcast_episodes", ["id" => $episode->id]);
 
     // Delete pcast episode ratings.
