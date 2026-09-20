@@ -38,7 +38,7 @@ require_once($CFG->dirroot . '/mod/pcast/tests/generator/lib.php');
  * @copyright  2016 Stephen Bourget
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class mod_pcast_search_testcase extends \advanced_testcase {
+class search_test extends \advanced_testcase {
     /**
      * @var string Area id
      */

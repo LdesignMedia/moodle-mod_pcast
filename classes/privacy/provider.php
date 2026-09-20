@@ -335,7 +335,12 @@ class provider implements
      * @param array $subcontext The location within the current context that this data belongs.
      * @param \stdClass $user the user record
      */
-    protected static function export_pcast_data_for_user(array $pcastdata, \context_module $context, array $subcontext, \stdClass $user) {
+    protected static function export_pcast_data_for_user(
+        array $pcastdata,
+        \context_module $context,
+        array $subcontext,
+        \stdClass $user
+    ) {
         // Fetch the generic module data for the pcast.
         $contextdata = helper::get_context_data($context, $user);
         // Merge with pcast data and write it.

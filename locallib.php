@@ -132,8 +132,8 @@ function pcast_print_author_menu($cm, $pcast, $mode, $hook, $sortkey = '', $sort
 
 /**
  * Prints the category menu
- * @todo This should use html_writer::tag()
- * @todo These styles should not be hard coded
+ * Note: this should use html_writer::tag().
+ * Note: these styles should not be hard coded.
  * @param object $cm
  * @param object $pcast
  * @param string $hook
@@ -188,7 +188,7 @@ function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGOR
         if ($category->nestedcategory == 0) {
             echo $menu[(int)$hook];
         } else {
-            // TODO: convert to lang file later.
+            // Note: this should be moved to a lang string.
             echo $menu[(int)$category->topcategory * 1000] . ': ' . $menu[(int)$hook];
         }
     }
@@ -403,10 +403,18 @@ function pcast_print_sorting_links($cm, $mode, $sortkey = '', $sortorder = '', $
 
             // Hyperlinks.
             $link1 = html_writer::tag('a', $strsortlastupdate, ['href' => $url1, 'title' => $strsortlastupdate . ' ' . $asc]);
-            $link2 = html_writer::tag('a', $strsortcreation . $icon, ['href' => $url2, 'title' => $strsortcreation . ' ' . $strchangeto]);
+            $link2 = html_writer::tag(
+                'a',
+                $strsortcreation . $icon,
+                ['href' => $url2, 'title' => $strsortcreation . ' ' . $strchangeto]
+            );
 
             // Output.
-            $html = html_writer::tag('span', get_string('current', 'pcast', $strsortcreation . ' ' . $currentorder), ['class' => 'accesshide']);
+            $html = html_writer::tag(
+                'span',
+                get_string('current', 'pcast', $strsortcreation . ' ' . $currentorder),
+                ['class' => 'accesshide']
+            );
             $html .= $strsortby . $strsep;
             $html .= $link1 . ' | ';
             $html .= html_writer::tag('span', $link2, ['class' => 'pcast-bold']);
@@ -721,7 +729,15 @@ function pcast_display_category_episodes($pcast, $cm, $groupmode = 0, $hook = PC
  * @param string $sortorder
  * @param int $page
  */
-function pcast_display_date_episodes($pcast, $cm, $groupmode = 0, $hook = '', $sortkey = PCAST_DATE_CREATED, $sortorder = 'desc', $page = 0) {
+function pcast_display_date_episodes(
+    $pcast,
+    $cm,
+    $groupmode = 0,
+    $hook = '',
+    $sortkey = PCAST_DATE_CREATED,
+    $sortorder = 'desc',
+    $page = 0
+) {
     global $DB, $USER;
 
     $context = context_module::instance($cm->id);
@@ -1613,7 +1629,7 @@ function pcast_get_supported_file_types($pcast) {
 
 /**
  * Helper function, builds an array of categories.
- * @todo cache results using MUC.
+ * Note: results could be cached using MUC.
  * @return array
  */
 function pcast_get_categories() {

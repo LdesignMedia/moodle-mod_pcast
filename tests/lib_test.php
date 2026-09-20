@@ -36,7 +36,7 @@ require_once($CFG->dirroot . '/mod/pcast/locallib.php');
  * @copyright  2018 Stephen Bourget
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class mod_pcast_lib_testcase extends \advanced_testcase {
+class lib_test extends \advanced_testcase {
     /**
      * Test calendar event creation.
      *

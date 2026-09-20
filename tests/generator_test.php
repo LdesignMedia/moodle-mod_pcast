@@ -34,7 +34,7 @@ namespace mod_pcast;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  *
  */
-class mod_pcast_generator_testcase extends \advanced_testcase {
+class generator_test extends \advanced_testcase {
     /**
      * Test generator for creating instance of module.
      *
