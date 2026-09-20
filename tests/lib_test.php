@@ -491,4 +491,55 @@ final class lib_test extends \advanced_testcase {
         $this->assertStringContainsString('Uncategorised episode', $output);
         $this->assertStringContainsString('Categorised episode', $output);
     }
+
+    /**
+     * Test that deleting an episode does not leave the activity marked complete.
+     *
+     * Regression test: the delete handler passed COMPLETION_COMPLETE to update_state(), which
+     * tells Moodle to mark the activity complete rather than to recalculate it, so a user who
+     * deleted their only episode stayed complete.
+     */
+    public function test_completion_recalculated_when_episode_deleted(): void {
+        global $DB, $CFG;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $CFG->enablecompletion = 1;
+
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
+        $pcast = $this->getDataGenerator()->create_module('pcast', [
+            'course' => $course->id,
+            'completion' => COMPLETION_TRACKING_AUTOMATIC,
+            'completionepisodes' => 1,
+        ]);
+        $cm = get_coursemodule_from_instance('pcast', $pcast->id);
+
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+
+        $this->setUser($student);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+        $episode = $generator->create_content($pcast, [
+            'userid' => $student->id,
+            'course' => $course->id,
+            'approved' => 1,
+        ]);
+
+        $completion = new \completion_info($course);
+        $completion->update_state(\cm_info::create($cm, $student->id), COMPLETION_UNKNOWN, $student->id);
+        $this->assertEquals(
+            COMPLETION_COMPLETE,
+            $completion->get_data($cm, false, $student->id)->completionstate
+        );
+
+        // Remove the episode, then recalculate exactly as deleteepisode.php does.
+        $DB->delete_records('pcast_episodes', ['id' => $episode->id]);
+        $completion->update_state(\cm_info::create($cm, $student->id), COMPLETION_UNKNOWN, $student->id);
+
+        $this->assertEquals(
+            COMPLETION_INCOMPLETE,
+            $completion->get_data($cm, false, $student->id)->completionstate,
+            'Completion must be recalculated once the episode is gone.'
+        );
+    }
 }

@@ -529,8 +529,6 @@ function pcast_print_recent_activity($course, $viewfullnames, $timestart) {
     return true;
 }
 
-
-
 /**
  * Checks if scale is being used by any instance of pcast.
  * This function was added in 1.9
@@ -548,7 +546,6 @@ function pcast_scale_used_anywhere($scaleid) {
         return false;
     }
 }
-
 
 /**
  * Lists all browsable file areas
@@ -591,7 +588,6 @@ function pcast_get_post_actions() {
 function pcast_is_moddata_trusted() {
     return false;
 }
-
 
 /**
  * Adds module specific settings to the navigation block
@@ -735,7 +731,6 @@ function pcast_get_itunes_categories($item, $pcast) {
     }
     return $item;
 }
-
 
  /**
   * File browsing support for pcast module.
@@ -1340,7 +1335,6 @@ function pcast_rating_permissions($contextid, $component, $ratingarea) {
         ];
     }
 }
-
 
 /**
  * Validates a submitted rating
