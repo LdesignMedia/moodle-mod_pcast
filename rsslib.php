@@ -154,16 +154,16 @@ function pcast_rss_get_feed($context, $args) {
             );
             $item->description = format_text(
                 $item->description,
-                'HTML',
-                ['context' => $context, 'trusted' => true]
+                $rec->episodesummaryformat,
+                ['context' => $context, 'trusted' => $rec->summarytrust]
             );
 
             if ($pcast->userscancategorize) {
                 // TODO: This is very inefficient (this generates 2 DB queries per entry).
                 $category = pcast_rss_category_lookup($rec);
-                if (!empty($item->topcategory)) {
+                if (!empty($rec->topcategory) && isset($category->top->name)) {
                     $item->topcategory = $category->top->name;
-                    if (!empty($item->nestedcategory)) {
+                    if (!empty($rec->nestedcategory) && isset($category->nested->name)) {
                         $item->nestedcategory = $category->nested->name;
                     }
                 }
@@ -235,6 +235,8 @@ function pcast_rss_get_sql($pcast, $time = 0) {
                   e.pcastid AS pcastid,
                   e.name AS episodename,
                   e.summary AS episodesummary,
+                  e.summaryformat AS episodesummaryformat,
+                  e.summarytrust AS summarytrust,
                   e.mediafile AS mediafile,
                   e.duration AS duration,
                   e.subtitle AS subtitle,
@@ -259,6 +261,8 @@ function pcast_rss_get_sql($pcast, $time = 0) {
                   e.pcastid AS pcastid,
                   e.name AS episodename,
                   e.summary AS episodesummary,
+                  e.summaryformat AS episodesummaryformat,
+                  e.summarytrust AS summarytrust,
                   e.mediafile AS mediafile,
                   e.duration AS duration,
                   e.subtitle AS subtitle,
@@ -510,7 +514,7 @@ function pcast_rss_add_items($context, $items, $itunes = false, $currentgroup = 
             // Only display group members entries in regular courses, Display everything when used on the front page.
             if (
                 (isset($members[$item->userid]->id) && ($members[$item->userid]->id == $item->userid))
-                || ($item->course === SITEID)
+                || ((int)$item->course === (int)SITEID)
             ) {
                 $result .= rss_start_tag('item', 2, true);
                 // Include the category if exists (some rss readers will use it to group items).
@@ -680,7 +684,7 @@ function pcast_build_pcast_file($pcast, $url) {
     if (isset($category->nested->name) && !empty($category->nested->name)) {
         $result .= rss_full_tag('category', 2, false, $category->nested->name);
     }
-    if (isset($pcast->subtitle) && !empty($category->subtitle)) {
+    if (!empty($pcast->subtitle)) {
         $result .= rss_full_tag('subtitle', 2, false, $pcast->subtitle);
     }
     $result .= rss_end_tag('channel', 1, true);
