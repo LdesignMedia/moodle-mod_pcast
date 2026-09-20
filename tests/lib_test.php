@@ -250,4 +250,113 @@ final class lib_test extends \advanced_testcase {
         $event->timestart = time();
         return \calendar_event::create($event);
     }
+
+    /**
+     * Test that deleting an activity also deletes its episode comments.
+     *
+     * Regression test: the query parameters were in the wrong order, so contextid was bound to the
+     * instance id and pcastid to the context id, and no comments were ever removed.
+     */
+    public function test_pcast_delete_instance_removes_comments(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $pcast = $this->getDataGenerator()->create_module('pcast', ['course' => $course->id]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+        $episode = $generator->create_content($pcast);
+        $context = \context_module::instance($pcast->cmid);
+
+        $DB->insert_record('comments', (object) [
+            'contextid' => $context->id,
+            'component' => 'mod_pcast',
+            'commentarea' => 'pcast_episode',
+            'itemid' => $episode->id,
+            'content' => 'A comment',
+            'format' => FORMAT_MOODLE,
+            'userid' => get_admin()->id,
+            'timecreated' => time(),
+        ]);
+        $this->assertEquals(1, $DB->count_records(
+            'comments',
+            ['commentarea' => 'pcast_episode', 'itemid' => $episode->id]
+        ));
+
+        pcast_delete_instance($pcast->id);
+
+        $this->assertEquals(0, $DB->count_records(
+            'comments',
+            ['commentarea' => 'pcast_episode', 'itemid' => $episode->id]
+        ));
+    }
+
+    /**
+     * Test that an episode summary longer than 255 characters can be stored.
+     *
+     * Regression test: install.xml declared summary as char(255) even though upgrade step
+     * 2016060300 had changed it to text, so fresh installs could not store a full summary.
+     */
+    public function test_episode_summary_accepts_long_text(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $pcast = $this->getDataGenerator()->create_module('pcast', ['course' => $course->id]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+
+        $longsummary = str_repeat('a', 1000);
+        $episode = $generator->create_content($pcast, ['summary' => $longsummary]);
+
+        $this->assertEquals($longsummary, $DB->get_field('pcast_episodes', 'summary', ['id' => $episode->id]));
+    }
+
+    /**
+     * Test resetting episodes belonging to users who are no longer enrolled.
+     *
+     * Regression test: the cleanup loop treated episode ids as pcast instance ids, and ran after the
+     * rows had already been deleted, so it matched nothing and the files were orphaned. It also
+     * cleared the whole file area rather than just the episodes being removed.
+     */
+    public function test_pcast_reset_userdata_not_enrolled(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $pcast = $this->getDataGenerator()->create_module('pcast', ['course' => $course->id]);
+        $context = \context_module::instance($pcast->cmid);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+
+        $enrolled = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($enrolled->id, $course->id, 'student');
+        $outsider = $this->getDataGenerator()->create_user();
+
+        $keep = $generator->create_content($pcast, ['userid' => $enrolled->id, 'course' => $course->id]);
+        $remove = $generator->create_content($pcast, ['userid' => $outsider->id, 'course' => $course->id]);
+
+        $fs = get_file_storage();
+        foreach ([$keep->id, $remove->id] as $itemid) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_pcast',
+                'filearea' => 'episode',
+                'itemid' => $itemid,
+                'filepath' => '/',
+                'filename' => 'media.bin',
+            ], 'media');
+        }
+
+        // Note: timeshift is deliberately absent, which used to raise an undefined property warning.
+        pcast_reset_userdata((object) ['courseid' => $course->id, 'reset_pcast_notenrolled' => 1]);
+
+        // The unenrolled user's episode and its file are gone.
+        $this->assertFalse($DB->record_exists('pcast_episodes', ['id' => $remove->id]));
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $remove->id, '', false));
+
+        // The enrolled user's episode and file are untouched.
+        $this->assertTrue($DB->record_exists('pcast_episodes', ['id' => $keep->id]));
+        $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $keep->id, '', false));
+    }
 }

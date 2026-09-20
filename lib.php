@@ -259,7 +259,7 @@ function pcast_delete_instance($id) {
     $DB->delete_records_select(
         'comments',
         "contextid=? AND commentarea=? AND itemid IN ($episodeselect)",
-        [$id, 'pcast_episode', $context->id]
+        [$context->id, 'pcast_episode', $id]
     );
 
     // Delete Tags.
@@ -1140,23 +1140,34 @@ function pcast_reset_userdata($data) {
                                       FROM {pcast_episodes} e
                                       WHERE e.course = ? " . $list;
 
+        // Collect the episodes before they are deleted, so their files and ratings can still be
+        // found afterwards. Note the pcast id is needed to resolve each episode's context.
+        $unenrolledepisodes = $DB->get_records_sql(
+            "SELECT e.id, e.pcastid FROM {pcast_episodes} e WHERE e.course = ? " . $list,
+            $params
+        );
+
         $params[] = 'pcast_episode';
         $DB->delete_records_select('comments', "itemid IN ($unenrolledepisodessql) AND commentarea=?", $params);
         $DB->delete_records_select('pcast_episodes', "course =? " . $list2, $params);
 
-        // Now get rid of all attachments.
-        if ($pcasts = $DB->get_records_sql($unenrolledepisodessql, $params)) {
-            foreach ($pcasts as $pcastid => $unused) {
-                if (!$cm = get_coursemodule_from_instance('pcast', $pcastid)) {
-                    continue;
-                }
-                $context = context_module::instance($cm->id);
-                $fs->delete_area_files($context->id, 'mod_pcast', 'episode');
-
-                // Delete ratings.
-                $ratingdeloptions->contextid = $context->id;
-                $rm->delete_ratings($ratingdeloptions);
+        // Now get rid of the attachments and ratings belonging to just those episodes.
+        foreach ($unenrolledepisodes as $episode) {
+            if (!$cm = get_coursemodule_from_instance('pcast', $episode->pcastid)) {
+                continue;
             }
+            $context = context_module::instance($cm->id);
+            $fs->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
+            $fs->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
+
+            // Delete ratings for this episode only. A separate options object is used so the
+            // itemid does not leak into the context-wide deletions further down.
+            $episoderatingdeloptions = new stdClass();
+            $episoderatingdeloptions->component = 'mod_pcast';
+            $episoderatingdeloptions->ratingarea = 'episode';
+            $episoderatingdeloptions->contextid = $context->id;
+            $episoderatingdeloptions->itemid = $episode->id;
+            $rm->delete_ratings($episoderatingdeloptions);
         }
 
         // Remove all grades from gradebook.
@@ -1221,7 +1232,7 @@ function pcast_reset_userdata($data) {
     }
     // Updating dates - shift may be negative too.
     // Any changes to the list of dates that needs to be rolled should be same during course restore and course reset.
-    if ($data->timeshift) {
+    if (!empty($data->timeshift)) {
         shift_course_mod_dates('pcast', ['assesstimestart', 'assesstimefinish'], $data->timeshift, $data->courseid);
         $status[] = ['component' => $componentstr, 'item' => get_string('datechanged'), 'error' => false];
     }

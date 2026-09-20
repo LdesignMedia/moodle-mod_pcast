@@ -203,6 +203,18 @@ function xmldb_pcast_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2018030501, 'pcast');
     }
 
+    if ($oldversion < 2026092000) {
+        // Upgrade step 2016060300 changed pcast_episodes.summary to text, but install.xml was never
+        // updated to match. Any site installed fresh since then still has char(255) and cannot store
+        // a summary longer than 255 characters. Bring those sites into line.
+        $table = new xmldb_table('pcast_episodes');
+        $field = new xmldb_field('summary', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null, 'name');
+        $dbman->change_field_type($table, $field);
+
+        // Pcast savepoint reached.
+        upgrade_mod_savepoint(true, 2026092000, 'pcast');
+    }
+
     // Final return of upgrade result (true/false) to Moodle. Must be always the last line in the script.
     return true;
 }
