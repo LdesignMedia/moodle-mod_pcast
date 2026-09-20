@@ -57,6 +57,10 @@ class restore_pcast_activity_structure_step extends restore_activity_structure_s
         $data->userid = $this->get_mappingid('user', $data->userid);
         $data->assesstimestart = $this->apply_date_offset($data->assesstimestart);
         $data->assesstimefinish = $this->apply_date_offset($data->assesstimefinish);
+        if ($data->scale < 0) {
+            // A negative value is a custom scale, so remap it to the scale created by the restore.
+            $data->scale = -($this->get_mappingid('scale', abs($data->scale)));
+        }
 
         // Insert the pcast record.
         $newitemid = $DB->insert_record('pcast', $data);

@@ -58,6 +58,7 @@ class restore_pcast_activity_task extends restore_activity_task {
         $contents = [];
 
         $contents[] = new restore_decode_content('pcast', ['intro'], 'pcast');
+        $contents[] = new restore_decode_content('pcast_episodes', ['summary'], 'pcast_episode');
 
         return $contents;
     }

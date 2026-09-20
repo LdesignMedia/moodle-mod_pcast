@@ -122,6 +122,7 @@ class backup_pcast_activity_structure_step extends backup_activity_structure_ste
         // Define id annotations.
 
         $pcast->annotate_ids('user', 'userid');
+        $pcast->annotate_ids('scale', 'scale');
         $episode->annotate_ids('user', 'userid');
         $view->annotate_ids('user', 'userid');
 

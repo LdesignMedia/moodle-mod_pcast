@@ -42,9 +42,9 @@ final class backup_restore_test extends \restore_date_testcase {
      * Build a course containing a podcast with one episode, files in both per-episode areas and a
      * view counter.
      *
-     * @return array [$course, $pcast, $episode]
+     * @return \stdClass The course containing the podcast.
      */
-    protected function create_fixture(): array {
+    protected function create_fixture(): \stdClass {
         global $DB;
 
         [$course, $pcast] = $this->create_course_and_module('pcast', [
@@ -77,7 +77,7 @@ final class backup_restore_test extends \restore_date_testcase {
             'lastview' => time(),
         ]);
 
-        return [$course, $pcast, $episode];
+        return $course;
     }
 
     /**
@@ -103,10 +103,7 @@ final class backup_restore_test extends \restore_date_testcase {
      * omitted 'episodesperpage' entirely, so both silently reverted to their defaults.
      */
     public function test_backup_restore_preserves_settings(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        [$course] = $this->create_fixture();
+        $course = $this->create_fixture();
         [$pcast] = $this->get_restored($this->backup_and_restore($course));
 
         $this->assertEquals(1, $pcast->enablerssitunes);
@@ -120,15 +117,41 @@ final class backup_restore_test extends \restore_date_testcase {
      * restore, so only the media file came across.
      */
     public function test_backup_restore_preserves_summary_files(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        [$course] = $this->create_fixture();
+        $course = $this->create_fixture();
         [, $episode, $context] = $this->get_restored($this->backup_and_restore($course));
 
         $fs = get_file_storage();
         $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
         $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
+    }
+
+    /**
+     * Test that links inside an episode summary are decoded on restore.
+     *
+     * Regression test: Moodle encodes /mod/pcast/view.php links found anywhere in the backup, but
+     * define_decode_contents() only declared the activity intro. A link inside an episode summary
+     * was therefore restored as a literal $@PCASTVIEWBYID*n@$ token.
+     */
+    public function test_backup_restore_decodes_summary_links(): void {
+        global $DB, $CFG;
+
+        $course = $this->create_fixture();
+        $pcast = $DB->get_record('pcast', ['course' => $course->id], '*', MUST_EXIST);
+        $cm = get_coursemodule_from_instance('pcast', $pcast->id);
+
+        // Put a link to this activity inside the episode summary.
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $pcast->id], '*', MUST_EXIST);
+        $DB->set_field(
+            'pcast_episodes',
+            'summary',
+            '<a href="' . $CFG->wwwroot . '/mod/pcast/view.php?id=' . $cm->id . '">See the podcast</a>',
+            ['id' => $episode->id]
+        );
+
+        [, $newepisode] = $this->get_restored($this->backup_and_restore($course));
+
+        $this->assertStringNotContainsString('$@PCASTVIEWBYID', $newepisode->summary);
+        $this->assertStringContainsString('/mod/pcast/view.php?id=', $newepisode->summary);
     }
 
     /**
@@ -140,10 +163,7 @@ final class backup_restore_test extends \restore_date_testcase {
     public function test_backup_restore_maps_views_to_parent_episode(): void {
         global $DB;
 
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        [$course] = $this->create_fixture();
+        $course = $this->create_fixture();
         [, $episode] = $this->get_restored($this->backup_and_restore($course));
 
         $this->assertEquals(1, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
