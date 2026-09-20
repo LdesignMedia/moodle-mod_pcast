@@ -55,7 +55,6 @@ if ($eid) {
 if (!empty($episode->courseid)) {
     $strpcasts = get_string('modulenameplural', 'pcast');
 
-    $CFG->framename = 'newwindow';
 
     $PAGE->navbar->add($strpcasts);
     $PAGE->set_title(strip_tags("$course->shortname: $strpcasts"));

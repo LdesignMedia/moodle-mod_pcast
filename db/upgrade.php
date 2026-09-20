@@ -215,6 +215,25 @@ function xmldb_pcast_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2026092000, 'pcast');
     }
 
+    if ($oldversion < 2026092002) {
+        // The pcast_episodes table had no index beyond its primary key, although every listing and
+        // cleanup query filters on pcastid, and several also filter on userid.
+        $table = new xmldb_table('pcast_episodes');
+
+        $index = new xmldb_index('pcastid', XMLDB_INDEX_NOTUNIQUE, ['pcastid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        $index = new xmldb_index('userid', XMLDB_INDEX_NOTUNIQUE, ['userid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Pcast savepoint reached.
+        upgrade_mod_savepoint(true, 2026092002, 'pcast');
+    }
+
     // Final return of upgrade result (true/false) to Moodle. Must be always the last line in the script.
     return true;
 }

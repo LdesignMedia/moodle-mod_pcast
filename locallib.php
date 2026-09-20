@@ -1072,7 +1072,7 @@ function pcast_display_episode_brief($episode, $cm, $showmedia = true, $showlink
     $table->width = '100%';
     $table->align = ["RIGHT", "LEFT"];
     // Name of episode.
-    $table->data[] = [get_string("name", "pcast"), format_text($episode->name, FORMAT_HTML, ['context' => $context])];
+    $table->data[] = [get_string("name", "pcast"), format_string($episode->name)];
 
     // Description.
     $summarytext = file_rewrite_pluginfile_urls(
@@ -1205,7 +1205,7 @@ function pcast_display_episode_full($episode, $cm, $course) {
     $table->width = '100%';
     $table->align = ["RIGHT", "LEFT"];
     // Name of episode.
-    $table->data[] = [get_string("name", "pcast"), $episode->name];
+    $table->data[] = [get_string("name", "pcast"), format_string($episode->name)];
 
     // Description.
     $summarytext = file_rewrite_pluginfile_urls(

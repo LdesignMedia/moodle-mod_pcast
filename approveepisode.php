@@ -78,7 +78,7 @@ if ($newstate != $episode->approved && confirm_sesskey()) {
     // Update completion state.
     $completion = new completion_info($course);
     if ($completion->is_enabled($cm) == COMPLETION_TRACKING_AUTOMATIC && $pcast->completionepisodes) {
-        $completion->update_state($cm, COMPLETION_COMPLETE, $episode->userid);
+        $completion->update_state($cm, COMPLETION_UNKNOWN, $episode->userid);
     }
 }
 

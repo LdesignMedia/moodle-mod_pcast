@@ -123,8 +123,8 @@ class mod_pcast_entry_form extends moodleform {
 
         // Content.
         $explicit = [];
-        $explicit[0]  = get_string('yes');
-        $explicit[1]  = get_string('no');
+        $explicit[0]  = get_string('no');
+        $explicit[1]  = get_string('yes');
         $explicit[2]  = get_string('clean', 'pcast');
         $mform->addElement('select', 'explicit', get_string('explicit', 'pcast'), $explicit);
         $mform->addHelpButton('explicit', 'explicit', 'pcast');

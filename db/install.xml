@@ -71,6 +71,10 @@
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="pcastid" UNIQUE="false" FIELDS="pcastid"/>
+        <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+      </INDEXES>
     </TABLE>
     <TABLE NAME="pcast_itunes_categories" COMMENT="iTunes top categories">
       <FIELDS>
