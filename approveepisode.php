@@ -28,7 +28,7 @@ require_once(dirname(__FILE__) . '/locallib.php');
 
 $eid = required_param('eid', PARAM_INT);    // Episode ID.
 $newstate = optional_param('newstate', PCAST_EPISODE_APPROVE, PARAM_BOOL);
-$mode = optional_param('mode', PCAST_APPROVAL_VIEW, PARAM_ALPHANUM);
+$mode = optional_param('mode', PCAST_APPROVAL_VIEW, PARAM_INT);
 $hook = optional_param('hook', 'ALL', PARAM_CLEAN);
 
 $episode = $DB->get_record('pcast_episodes', ['id' => $eid], '*', MUST_EXIST);

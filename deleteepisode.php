@@ -29,7 +29,7 @@ $id       = required_param('id', PARAM_INT);          // Course module ID.
 $confirm  = optional_param('confirm', 0, PARAM_INT);  // Commit the operation?
 $episode    = optional_param('episode', 0, PARAM_INT);    // Episode id.
 $prevmode = required_param('prevmode', PARAM_INT);   // Display mode.
-$hook     = optional_param('hook', '', PARAM_ALPHANUM);   // Alphabet bar filter.
+$hook     = optional_param('hook', '', PARAM_CLEAN);   // Alphabet bar filter.
 
 $url = new moodle_url('/mod/pcast/deleteepisode.php', ['id' => $id, 'prevmode' => $prevmode]);
 if ($confirm !== 0) {

@@ -461,8 +461,8 @@ final class lib_test extends \advanced_testcase {
      *
      * Regression test: view.php defaults the hook to the string 'ALL', which was compared against
      * the integer PCAST_SHOW_ALL_CATEGORIES. That was true on PHP 7 and false on PHP 8, so the
-     * listing fell through to the category lookup, which decodes 'ALL' to top category 0 and
-     * therefore showed only uncategorised episodes.
+     * listing fell through to the category lookup. That decoder switches on string length, so
+     * 'ALL' hit its default branch and filtered by the podcast's own category instead.
      */
     public function test_category_view_with_all_hook_lists_categorised_episodes(): void {
         global $DB;

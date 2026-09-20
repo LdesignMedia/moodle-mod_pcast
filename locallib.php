@@ -136,7 +136,7 @@ function pcast_print_author_menu($cm, $pcast, $mode, $hook, $sortkey = '', $sort
  * @todo These styles should not be hard coded
  * @param object $cm
  * @param object $pcast
- * @param string $hook
+ * @param int|string $hook
  */
 function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGORIES) {
     // The hook defaults to the string 'ALL' in view.php; in category view that means all categories.
@@ -190,10 +190,11 @@ function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGOR
 
         // Print the category names in the format top: nested.
         if ($category->nestedcategory == 0) {
-            echo $menu[(int)$hook];
+            echo $menu[(int)$hook] ?? get_string('allcategories', 'pcast');
         } else {
             // TODO: convert to lang file later.
-            echo $menu[(int)$category->topcategory * 1000] . ': ' . $menu[(int)$hook];
+            echo ($menu[(int)$category->topcategory * 1000] ?? '') . ': ' .
+                ($menu[(int)$hook] ?? get_string('allcategories', 'pcast'));
         }
     }
 
