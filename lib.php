@@ -1084,8 +1084,6 @@ function pcast_reset_userdata($data) {
                            FROM {pcast} p
                           WHERE p.course = ?";
 
-    $params = [$data->courseid];
-
     $fs = get_file_storage();
 
     $rm = new rating_manager();
@@ -1095,18 +1093,22 @@ function pcast_reset_userdata($data) {
 
     if (!empty($data->reset_pcast_all)) {
         // Delete entries if requested.
-        $params[] = 'pcast_episode';
-        $DB->delete_records_select('comments', "itemid IN ($allepisodessql) AND commentarea=?", $params);
-        $DB->delete_records_select('pcast_episodes', "pcastid IN ($allpcastssql)", $params);
+        $DB->delete_records_select(
+            'comments',
+            "itemid IN ($allepisodessql) AND commentarea=?",
+            [$data->courseid, 'pcast_episode']
+        );
+        $DB->delete_records_select('pcast_episodes', "pcastid IN ($allpcastssql)", [$data->courseid]);
 
         // Now get rid of all attachments.
-        if ($pcasts = $DB->get_records_sql($allpcastssql, $params)) {
+        if ($pcasts = $DB->get_records_sql($allpcastssql, [$data->courseid])) {
             foreach ($pcasts as $pcastid => $unused) {
                 if (!$cm = get_coursemodule_from_instance('pcast', $pcastid)) {
                     continue;
                 }
                 $context = context_module::instance($cm->id);
                 $fs->delete_area_files($context->id, 'mod_pcast', 'episode');
+                $fs->delete_area_files($context->id, 'mod_pcast', 'summary');
 
                 // Delete ratings.
                 $ratingdeloptions->contextid = $context->id;
@@ -1130,10 +1132,11 @@ function pcast_reset_userdata($data) {
         $people = get_enrolled_users(context_course::instance($data->courseid));
         $list = '';
         $list2 = '';
+        $episodeparams = [$data->courseid];
         foreach ($people as $person) {
             $list .= ' AND e.userid != ?';
             $list2 .= ' AND userid != ?';
-            $params[] = $person->id;
+            $episodeparams[] = $person->id;
         }
         // Construct SQL to episodes from users whe are no longer enrolled.
             $unenrolledepisodessql = "SELECT e.id
@@ -1144,21 +1147,32 @@ function pcast_reset_userdata($data) {
         // found afterwards. Note the pcast id is needed to resolve each episode's context.
         $unenrolledepisodes = $DB->get_records_sql(
             "SELECT e.id, e.pcastid FROM {pcast_episodes} e WHERE e.course = ? " . $list,
-            $params
+            $episodeparams
         );
 
-        $params[] = 'pcast_episode';
-        $DB->delete_records_select('comments', "itemid IN ($unenrolledepisodessql) AND commentarea=?", $params);
-        $DB->delete_records_select('pcast_episodes', "course =? " . $list2, $params);
+        $DB->delete_records_select(
+            'comments',
+            "itemid IN ($unenrolledepisodessql) AND commentarea=?",
+            array_merge($episodeparams, ['pcast_episode'])
+        );
+        $DB->delete_records_select('pcast_views', "episodeid IN ($unenrolledepisodessql)", $episodeparams);
+        $DB->delete_records_select('pcast_episodes', "course =? " . $list2, $episodeparams);
 
-        // Now get rid of the attachments and ratings belonging to just those episodes.
+        // Now get rid of the attachments, ratings and tags belonging to just those episodes.
+        $episodecontexts = [];
         foreach ($unenrolledepisodes as $episode) {
-            if (!$cm = get_coursemodule_from_instance('pcast', $episode->pcastid)) {
-                continue;
+            if (!isset($episodecontexts[$episode->pcastid])) {
+                if (!$cm = get_coursemodule_from_instance('pcast', $episode->pcastid)) {
+                    continue;
+                }
+                $episodecontexts[$episode->pcastid] = context_module::instance($cm->id);
             }
-            $context = context_module::instance($cm->id);
+            $context = $episodecontexts[$episode->pcastid];
             $fs->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
             $fs->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
+
+            // Remove this episode's tags.
+            core_tag_tag::remove_all_item_tags('mod_pcast', 'pcast_episodes', $episode->id);
 
             // Delete ratings for this episode only. A separate options object is used so the
             // itemid does not leak into the context-wide deletions further down.
@@ -1181,7 +1195,7 @@ function pcast_reset_userdata($data) {
     // Remove all ratings.
     if (!empty($data->reset_pcast_ratings)) {
         // Remove ratings.
-        if ($pcasts = $DB->get_records_sql($allpcastssql, $params)) {
+        if ($pcasts = $DB->get_records_sql($allpcastssql, [$data->courseid])) {
             foreach ($pcasts as $pcastid => $unused) {
                 if (!$cm = get_coursemodule_from_instance('pcast', $pcastid)) {
                     continue;
@@ -1220,14 +1234,17 @@ function pcast_reset_userdata($data) {
 
     // Remove comments.
     if (!empty($data->reset_pcast_comments)) {
-        $params[] = 'pcast_episode';
-        $DB->delete_records_select('comments', "itemid IN ($allepisodessql) AND commentarea= ? ", $params);
+        $DB->delete_records_select(
+            'comments',
+            "itemid IN ($allepisodessql) AND commentarea= ? ",
+            [$data->courseid, 'pcast_episode']
+        );
         $status[] = ['component' => $componentstr, 'item' => get_string('deleteallcomments'), 'error' => false];
     }
 
     // Remove views.
     if (!empty($data->reset_pcast_views)) {
-        $DB->delete_records_select('pcast_views', "episodeid IN ($allepisodessql) ", $params);
+        $DB->delete_records_select('pcast_views', "episodeid IN ($allepisodessql) ", [$data->courseid]);
         $status[] = ['component' => $componentstr, 'item' => get_string('deleteallviews', 'pcast'), 'error' => false];
     }
     // Updating dates - shift may be negative too.

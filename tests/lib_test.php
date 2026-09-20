@@ -283,11 +283,29 @@ final class lib_test extends \advanced_testcase {
             ['commentarea' => 'pcast_episode', 'itemid' => $episode->id]
         ));
 
+        // A second activity in the same course, whose comment must be left alone.
+        $other = $this->getDataGenerator()->create_module('pcast', ['course' => $course->id]);
+        $otherepisode = $generator->create_content($other);
+        $DB->insert_record('comments', (object) [
+            'contextid' => \context_module::instance($other->cmid)->id,
+            'component' => 'mod_pcast',
+            'commentarea' => 'pcast_episode',
+            'itemid' => $otherepisode->id,
+            'content' => 'Another activity',
+            'format' => FORMAT_MOODLE,
+            'userid' => get_admin()->id,
+            'timecreated' => time(),
+        ]);
+
         pcast_delete_instance($pcast->id);
 
         $this->assertEquals(0, $DB->count_records(
             'comments',
             ['commentarea' => 'pcast_episode', 'itemid' => $episode->id]
+        ));
+        $this->assertEquals(1, $DB->count_records(
+            'comments',
+            ['commentarea' => 'pcast_episode', 'itemid' => $otherepisode->id]
         ));
     }
 
@@ -338,14 +356,22 @@ final class lib_test extends \advanced_testcase {
 
         $fs = get_file_storage();
         foreach ([$keep->id, $remove->id] as $itemid) {
-            $fs->create_file_from_string([
-                'contextid' => $context->id,
-                'component' => 'mod_pcast',
-                'filearea' => 'episode',
-                'itemid' => $itemid,
-                'filepath' => '/',
-                'filename' => 'media.bin',
-            ], 'media');
+            foreach (['episode', 'summary'] as $area) {
+                $fs->create_file_from_string([
+                    'contextid' => $context->id,
+                    'component' => 'mod_pcast',
+                    'filearea' => $area,
+                    'itemid' => $itemid,
+                    'filepath' => '/',
+                    'filename' => $area . '.bin',
+                ], 'media');
+            }
+            $DB->insert_record('pcast_views', (object) [
+                'episodeid' => $itemid,
+                'userid' => $enrolled->id,
+                'views' => 1,
+                'lastview' => time(),
+            ]);
         }
 
         // Note: timeshift is deliberately absent, which used to raise an undefined property warning.
@@ -355,8 +381,46 @@ final class lib_test extends \advanced_testcase {
         $this->assertFalse($DB->record_exists('pcast_episodes', ['id' => $remove->id]));
         $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $remove->id, '', false));
 
-        // The enrolled user's episode and file are untouched.
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $remove->id, '', false));
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['episodeid' => $remove->id]));
+
+        // The enrolled user's episode, files and views are untouched.
         $this->assertTrue($DB->record_exists('pcast_episodes', ['id' => $keep->id]));
         $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $keep->id, '', false));
+        $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $keep->id, '', false));
+        $this->assertEquals(1, $DB->count_records('pcast_views', ['episodeid' => $keep->id]));
+    }
+
+    /**
+     * Test that a full episode reset clears the episodes and both file areas.
+     */
+    public function test_pcast_reset_userdata_all(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $pcast = $this->getDataGenerator()->create_module('pcast', ['course' => $course->id]);
+        $context = \context_module::instance($pcast->cmid);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+        $episode = $generator->create_content($pcast, ['course' => $course->id]);
+
+        $fs = get_file_storage();
+        foreach (['episode', 'summary'] as $area) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_pcast',
+                'filearea' => $area,
+                'itemid' => $episode->id,
+                'filepath' => '/',
+                'filename' => $area . '.bin',
+            ], 'media');
+        }
+
+        pcast_reset_userdata((object) ['courseid' => $course->id, 'reset_pcast_all' => 1]);
+
+        $this->assertEquals(0, $DB->count_records('pcast_episodes', ['pcastid' => $pcast->id]));
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
     }
 }
