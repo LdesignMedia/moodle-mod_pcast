@@ -136,9 +136,13 @@ function pcast_print_author_menu($cm, $pcast, $mode, $hook, $sortkey = '', $sort
  * @todo These styles should not be hard coded
  * @param object $cm
  * @param object $pcast
- * @param string $hook
+ * @param int|string $hook
  */
 function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGORIES) {
+    // The hook defaults to the string 'ALL' in view.php; in category view that means all categories.
+    if ($hook === 'ALL') {
+        $hook = PCAST_SHOW_ALL_CATEGORIES;
+    }
      global $DB, $OUTPUT;
 
      echo '<table border="0" width="100%">';
@@ -186,10 +190,11 @@ function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGOR
 
         // Print the category names in the format top: nested.
         if ($category->nestedcategory == 0) {
-            echo $menu[(int)$hook];
+            echo $menu[(int)$hook] ?? get_string('allcategories', 'pcast');
         } else {
             // TODO: convert to lang file later.
-            echo $menu[(int)$category->topcategory * 1000] . ': ' . $menu[(int)$hook];
+            echo ($menu[(int)$category->topcategory * 1000] ?? '') . ': ' .
+                ($menu[(int)$hook] ?? get_string('allcategories', 'pcast'));
         }
     }
 
@@ -651,6 +656,10 @@ function pcast_episode_allowed_viewing($episode, $cm, $groupmode) {
  * @param int $page
  */
 function pcast_display_category_episodes($pcast, $cm, $groupmode = 0, $hook = PCAST_SHOW_ALL_CATEGORIES, $page = 0) {
+    // The hook defaults to the string 'ALL' in view.php; in category view that means all categories.
+    if ($hook === 'ALL') {
+        $hook = PCAST_SHOW_ALL_CATEGORIES;
+    }
     global $DB, $USER;
 
     $context = context_module::instance($cm->id);
