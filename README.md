@@ -1,6 +1,6 @@
 # Pcast — Podcasting module for Moodle
 
-[![Moodle Plugin CI](https://github.com/LdesignMedia/moodle-mod_pcast/actions/workflows/moodle-ci.yml/badge.svg)](https://github.com/LdesignMedia/moodle-mod_pcast/actions)
+[![ci](https://github.com/LdesignMedia/moodle-mod_pcast/actions/workflows/ci.yml/badge.svg)](https://github.com/LdesignMedia/moodle-mod_pcast/actions/workflows/ci.yml)
 
 Pcast is a Moodle activity module for publishing and subscribing to podcasts inside a
 course. Teachers and (optionally) students can post audio or video episodes, which are

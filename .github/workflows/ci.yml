@@ -1,0 +1,17 @@
+# .github/workflows/ci.yml
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    uses: catalyst/catalyst-moodle-workflows/.github/workflows/ci.yml@main
+    with:
+      # mod_pcast ships PHPUnit tests; run them.
+      disable_phpunit: false
+      # Behat is intentionally not run for this plugin.
+      disable_behat: true
+      # This is a fork, so do not auto-publish to the Moodle plugins directory.
+      disable_release: true
+      # mod_pcast requires Moodle 5.0+, which requires PHP 8.2+.
+      min_php: "8.2"
