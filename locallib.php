@@ -139,6 +139,10 @@ function pcast_print_author_menu($cm, $pcast, $mode, $hook, $sortkey = '', $sort
  * @param string $hook
  */
 function pcast_print_categories_menu($cm, $pcast, $hook = PCAST_SHOW_ALL_CATEGORIES) {
+    // The hook defaults to the string 'ALL' in view.php; in category view that means all categories.
+    if ($hook === 'ALL') {
+        $hook = PCAST_SHOW_ALL_CATEGORIES;
+    }
      global $DB, $OUTPUT;
 
      echo '<table border="0" width="100%">';
@@ -651,6 +655,10 @@ function pcast_episode_allowed_viewing($episode, $cm, $groupmode) {
  * @param int $page
  */
 function pcast_display_category_episodes($pcast, $cm, $groupmode = 0, $hook = PCAST_SHOW_ALL_CATEGORIES, $page = 0) {
+    // The hook defaults to the string 'ALL' in view.php; in category view that means all categories.
+    if ($hook === 'ALL') {
+        $hook = PCAST_SHOW_ALL_CATEGORIES;
+    }
     global $DB, $USER;
 
     $context = context_module::instance($cm->id);

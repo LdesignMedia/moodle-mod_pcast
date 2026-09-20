@@ -141,13 +141,12 @@ class episode_action_bar implements renderable, templatable {
             $options[get_string('episodeviews', 'pcast')] = $viewsbaseurl->out(false);
         }
 
-        if ($mode == PCAST_EPISODE_VIEW) {
-            $active = $stdbaseurl->out(false);
-        } else if ($mode == PCAST_EPISODE_COMMENT_AND_RATE) {
+        if ($mode == PCAST_EPISODE_COMMENT_AND_RATE && isset($rateurl)) {
             $active = $rateurl->out(false);
-        } else if ($mode == PCAST_EPISODE_VIEWS) {
+        } else if ($mode == PCAST_EPISODE_VIEWS && isset($viewsbaseurl)) {
             $active = $viewsbaseurl->out(false);
         } else {
+            // The standard view, and any mode whose tab is not available to this user.
             $active = $stdbaseurl->out(false);
         }
 

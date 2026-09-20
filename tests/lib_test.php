@@ -423,4 +423,72 @@ final class lib_test extends \advanced_testcase {
         $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
         $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
     }
+
+    /**
+     * Test that every language string referenced by the plugin actually exists.
+     *
+     * Regression test: nopcasts, databaseerror, errdeltimeexpired and notapproved were referenced
+     * in code but never defined, so users saw raw [[nopcasts]] markers on an empty course index.
+     */
+    public function test_referenced_language_strings_exist(): void {
+        $this->resetAfterTest();
+
+        $manager = get_string_manager();
+        foreach (['nopcasts', 'databaseerror', 'errdeltimeexpired', 'notapproved'] as $identifier) {
+            $this->assertTrue(
+                $manager->string_exists($identifier, 'mod_pcast'),
+                "The string '{$identifier}' is used by mod_pcast but is not defined."
+            );
+        }
+    }
+
+    /**
+     * Test that the secondary navigation class is where core looks for it.
+     *
+     * Regression test: the class declared namespace mod_pcast\navigation\views but lived under
+     * classes/local/views, so core's class_exists() check never found it and the custom secondary
+     * navigation, including the pending-approval tab, silently did nothing.
+     */
+    public function test_secondary_navigation_class_is_autoloadable(): void {
+        $this->assertTrue(
+            class_exists('mod_pcast\\navigation\\views\\secondary'),
+            'Core resolves the secondary navigation class by namespace; it must be autoloadable.'
+        );
+    }
+
+    /**
+     * Test that category view with the default hook lists categorised episodes too.
+     *
+     * Regression test: view.php defaults the hook to the string 'ALL', which was compared against
+     * the integer PCAST_SHOW_ALL_CATEGORIES. That was true on PHP 7 and false on PHP 8, so the
+     * listing fell through to the category lookup, which decodes 'ALL' to top category 0 and
+     * therefore showed only uncategorised episodes.
+     */
+    public function test_category_view_with_all_hook_lists_categorised_episodes(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $pcast = $this->getDataGenerator()->create_module('pcast', [
+            'course' => $course->id,
+            'userscancategorize' => 1,
+        ]);
+        $cm = get_coursemodule_from_instance('pcast', $pcast->id);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_pcast');
+
+        $uncategorised = $generator->create_content($pcast, ['name' => 'Uncategorised episode']);
+        $categorised = $generator->create_content($pcast, ['name' => 'Categorised episode']);
+        $DB->set_field('pcast_episodes', 'topcategory', 1, ['id' => $categorised->id]);
+
+        $full = $DB->get_record('pcast', ['id' => $pcast->id], '*', MUST_EXIST);
+
+        ob_start();
+        pcast_display_category_episodes($full, $cm, 0, 'ALL');
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Uncategorised episode', $output);
+        $this->assertStringContainsString('Categorised episode', $output);
+    }
 }
