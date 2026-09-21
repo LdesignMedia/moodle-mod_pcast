@@ -15,3 +15,5 @@ jobs:
       disable_release: true
       # mod_pcast requires Moodle 5.0+, which requires PHP 8.2+.
       min_php: "8.2"
+      # Third-party getID3 library; already excluded from other checks via thirdpartylibs.xml.
+      ignore_paths: lib/getid3

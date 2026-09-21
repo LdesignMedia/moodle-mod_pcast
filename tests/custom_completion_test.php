@@ -95,7 +95,7 @@ final class custom_completion_test extends advanced_testcase {
         // Build a mock cm_info instance.
         $mockcminfo = $this->getMockBuilder(cm_info::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['__get'])
+            ->onlyMethods(['__get', 'get_custom_data'])
             ->getMock();
 
         // Mock the return of the magic getter method when fetching the cm_info object's customdata and instance values.
@@ -105,6 +105,11 @@ final class custom_completion_test extends advanced_testcase {
                 ['customdata', $customdataval],
                 ['instance', 1],
             ]);
+
+        // Moodle 5.1+ core calls get_custom_data() instead of the magic customdata getter.
+        $mockcminfo->expects($this->any())
+            ->method('get_custom_data')
+            ->willReturn($customdataval);
 
         // Mock the DB calls.
         $DB = $this->createMock(get_class($DB));
@@ -206,13 +211,18 @@ final class custom_completion_test extends advanced_testcase {
         // Build a mock cm_info instance.
         $mockcminfo = $this->getMockBuilder(cm_info::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['__get'])
+            ->onlyMethods(['__get', 'get_custom_data'])
             ->getMock();
 
         // Mock the return of magic getter for the customdata attribute.
         $mockcminfo->expects($this->any())
             ->method('__get')
             ->with('customdata')
+            ->willReturn($customdataval);
+
+        // Moodle 5.1+ core calls get_custom_data() instead of the magic customdata getter.
+        $mockcminfo->expects($this->any())
+            ->method('get_custom_data')
             ->willReturn($customdataval);
 
         $customcompletion = new custom_completion($mockcminfo, 1);
