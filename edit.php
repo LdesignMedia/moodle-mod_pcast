@@ -98,6 +98,17 @@ if ($id) { // If the entry is specified.
     }
 } else { // A new entry.
     require_capability('mod/pcast:write', $context);
+
+    // Enforce the "Allow users to post episodes" setting server side. Previously it only controlled whether the
+    // add button was rendered, so a user could still post by opening this page directly. The capability
+    // combination here mirrors the one used to show the button (see standard_action_bar::get_add_button()).
+    if (
+        empty($pcast->userscanpost)
+        && !has_capability('mod/pcast:manage', $context)
+        && !has_capability('mod/pcast:approve', $context)
+    ) {
+        throw new moodle_exception('noeditprivlidges', 'pcast', new moodle_url('/mod/pcast/view.php', ['id' => $cmid]));
+    }
     $episode = new stdClass();
     $episode->id = null;
     $episode->summary = '';                // This will be updated later.

@@ -37,8 +37,8 @@ require_once($CFG->dirroot . '/comment/lib.php');
  * @package    mod_pcast
  * @copyright 2018 Simey Lameze <simey@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \mod_pcast\privacy\provider
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(provider::class)]
 final class provider_test extends \core_privacy\tests\provider_testcase {
     /** @var stdClass The student object. */
     protected $student;
@@ -276,6 +276,337 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $commentcount = $DB->count_records('comments', ['component' => 'mod_pcast', 'commentarea' => 'pcast_episode',
              'userid' => $this->student->id, ]);
         $this->assertEquals(1, $commentcount);
+    }
+
+    /**
+     * Test that exporting one context does not leak episodes from another.
+     *
+     * Regression test: AND bound tighter than OR in the export query, so the comment and rating
+     * EXISTS branches ignored the context restriction entirely. A user who had merely commented
+     * on an episode elsewhere got that other activity exported too.
+     */
+    public function test_export_for_context_does_not_leak_other_contexts(): void {
+        $cm1 = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context1 = \context_module::instance($cm1->id);
+
+        // A second pcast, in a second course, that the student only comments on.
+        $course2 = $this->getDataGenerator()->create_course();
+        $pcast2 = $this->plugingenerator->create_instance(['course' => $course2->id]);
+        $cm2 = get_coursemodule_from_instance('pcast', $pcast2->id);
+        $context2 = \context_module::instance($cm2->id);
+
+        $this->setUser($this->teacher);
+        $episode2 = $this->plugingenerator->create_content($pcast2, ['name' => 'Other course episode',
+            'approved' => 1, ]);
+
+        $this->setUser($this->student);
+        $comment = $this->get_comment_object($context2, $episode2->id);
+        $comment->add('Commented in another course');
+
+        // Export only the first context.
+        $contextlist = new \core_privacy\local\request\approved_contextlist(
+            $this->student,
+            'mod_pcast',
+            [$context1->id]
+        );
+        provider::export_user_data($contextlist);
+
+        // The second context must not have been written to.
+        $writer2 = \core_privacy\local\request\writer::with_context($context2);
+        $this->assertFalse($writer2->has_any_data());
+    }
+
+    /**
+     * Test deleting data for a set of users in a context.
+     *
+     * Regression test: this path used to delete from pcast_episodes_categories, a table that does
+     * not exist, so it threw before comments, ratings, files or episodes were removed.
+     */
+    public function test_delete_data_for_users(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+
+        $this->assertEquals(1, $DB->count_records(
+            'pcast_episodes',
+            ['pcastid' => $this->pcast->id, 'userid' => $this->student->id]
+        ));
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_pcast', [$this->student->id]);
+        provider::delete_data_for_users($userlist);
+
+        $this->assertEquals(0, $DB->count_records(
+            'pcast_episodes',
+            ['pcastid' => $this->pcast->id, 'userid' => $this->student->id]
+        ));
+    }
+
+    /**
+     * Test that purging a context also removes the episode view counters.
+     *
+     * Regression test: the episodes were deleted before the loop that used them to find the view
+     * rows, so the rows in pcast_views survived the purge.
+     */
+    public function test_delete_data_for_all_users_in_context_removes_views(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $this->pcast->id], '*', MUST_EXIST);
+
+        $DB->insert_record('pcast_views', (object) [
+            'episodeid' => $episode->id,
+            'userid' => $this->student->id,
+            'views' => 3,
+            'lastview' => time(),
+        ]);
+        $this->assertEquals(1, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
+
+        provider::delete_data_for_all_users_in_context($context);
+
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['episodeid' => $episode->id]));
+    }
+
+    /**
+     * Test that purging a context removes files from both of the per-episode file areas.
+     *
+     * Regression test: the deletion targeted a 'mediafile' area, which does not exist. mediafile is
+     * a column of pcast_episodes; the real areas are logo, episode and summary. Files embedded in
+     * an episode summary therefore survived erasure.
+     */
+    public function test_delete_data_for_all_users_in_context_removes_summary_files(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $this->pcast->id], '*', MUST_EXIST);
+
+        $fs = get_file_storage();
+        foreach (['episode', 'summary'] as $area) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_pcast',
+                'filearea' => $area,
+                'itemid' => $episode->id,
+                'filepath' => '/',
+                'filename' => $area . '.txt',
+            ], 'file content');
+        }
+        $this->assertCount(1, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
+
+        provider::delete_data_for_all_users_in_context($context);
+
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'episode', $episode->id, '', false));
+        $this->assertCount(0, $fs->get_area_files($context->id, 'mod_pcast', 'summary', $episode->id, '', false));
+    }
+
+    /**
+     * Seed a second episode by the teacher and view counters for two different viewers.
+     *
+     * A row in pcast_views belongs to the user who listened, not to the episode author, so this
+     * gives every combination: each user has a counter on their own episode and on the other one.
+     *
+     * @return array [$viewer, $studentepisode, $teacherepisode]
+     */
+    protected function seed_views(): array {
+        global $DB;
+
+        $viewer = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($viewer->id, $this->course->id, 'student');
+
+        $studentepisode = $DB->get_record(
+            'pcast_episodes',
+            ['pcastid' => $this->pcast->id, 'userid' => $this->student->id],
+            '*',
+            MUST_EXIST
+        );
+
+        $this->setUser($this->teacher);
+        $teacherepisode = $this->plugingenerator->create_content($this->pcast, ['name' => 'Second episode', 'approved' => 1]);
+        $this->setUser($this->student);
+
+        // Every counter gets a distinct value so an assertion cannot pass on somebody else's row.
+        $counters = [
+            [$this->student->id, $studentepisode->id, 2],
+            [$this->student->id, $teacherepisode->id, 3],
+            [$viewer->id, $studentepisode->id, 5],
+            [$viewer->id, $teacherepisode->id, 7],
+        ];
+        foreach ($counters as [$userid, $episodeid, $views]) {
+            $DB->insert_record('pcast_views', (object) [
+                'episodeid' => $episodeid,
+                'userid' => $userid,
+                'views' => $views,
+                'lastview' => time(),
+            ]);
+        }
+
+        return [$viewer, $studentepisode, $teacherepisode];
+    }
+
+    /**
+     * Test that erasing one user's data erases that user's view counters and nobody else's.
+     *
+     * Regression test: the counters were deleted by episode id for the episodes the user authored,
+     * which erased every other viewer's counter on those episodes while leaving the user's own
+     * counters on other people's episodes in place.
+     */
+    public function test_delete_data_for_user_scopes_views_to_that_user(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        [$viewer, $studentepisode, $teacherepisode] = $this->seed_views();
+
+        $contextlist = new \core_privacy\local\request\approved_contextlist(
+            $this->student,
+            'mod_pcast',
+            [$context->id]
+        );
+        provider::delete_data_for_user($contextlist);
+
+        $this->assertEquals(
+            0,
+            $DB->count_records('pcast_views', ['userid' => $this->student->id]),
+            'Every counter belonging to the erased user should be gone.'
+        );
+        $this->assertEquals(
+            1,
+            $DB->count_records('pcast_views', ['userid' => $viewer->id, 'episodeid' => $teacherepisode->id]),
+            'Another viewer\'s counter on a surviving episode must not be collateral damage.'
+        );
+        $this->assertEquals(
+            0,
+            $DB->count_records('pcast_views', ['episodeid' => $studentepisode->id]),
+            'No counter may outlive the episode it belongs to.'
+        );
+    }
+
+    /**
+     * Test that erasing several users' data scopes the view counters the same way.
+     *
+     * Regression test: see test_delete_data_for_user_scopes_views_to_that_user.
+     */
+    public function test_delete_data_for_users_scopes_views_to_those_users(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        [$viewer, $studentepisode, $teacherepisode] = $this->seed_views();
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_pcast', [$this->student->id]);
+        provider::delete_data_for_users($userlist);
+
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['userid' => $this->student->id]));
+        $this->assertEquals(
+            1,
+            $DB->count_records('pcast_views', ['userid' => $viewer->id, 'episodeid' => $teacherepisode->id])
+        );
+        $this->assertEquals(
+            0,
+            $DB->count_records('pcast_views', ['episodeid' => $studentepisode->id]),
+            'No counter may outlive the episode it belongs to.'
+        );
+    }
+
+    /**
+     * Test that a user who only listened still has their counters erased.
+     *
+     * Regression test: the method returned early when the selected users had authored no episodes,
+     * so for a listener nothing at all was deleted.
+     */
+    public function test_delete_data_for_users_erases_a_listener_who_authored_nothing(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        [$viewer] = $this->seed_views();
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_pcast', [$viewer->id]);
+        provider::delete_data_for_users($userlist);
+
+        $this->assertEquals(0, $DB->count_records('pcast_views', ['userid' => $viewer->id]));
+        $this->assertEquals(
+            2,
+            $DB->count_records('pcast_views', ['userid' => $this->student->id]),
+            'Only the selected user\'s counters should be removed.'
+        );
+    }
+
+    /**
+     * Test that a user who only commented still has their comment erased.
+     *
+     * Regression test: the same early return meant that a user who had authored no episodes kept
+     * their comments as well as their view counters.
+     */
+    public function test_delete_data_for_users_erases_a_commenter_who_authored_nothing(): void {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        $episode = $DB->get_record('pcast_episodes', ['pcastid' => $this->pcast->id], '*', MUST_EXIST);
+
+        $commenter = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($commenter->id, $this->course->id, 'student');
+        $this->setUser($commenter);
+        $this->get_comment_object($context, $episode->id)->add('A passing remark');
+        $this->assertEquals(1, $DB->count_records('comments', ['userid' => $commenter->id]));
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_pcast', [$commenter->id]);
+        provider::delete_data_for_users($userlist);
+
+        $this->assertEquals(0, $DB->count_records('comments', ['userid' => $commenter->id]));
+        $this->assertEquals(
+            1,
+            $DB->count_records('comments', ['userid' => $this->student->id]),
+            'Only the selected user\'s comments should be removed.'
+        );
+    }
+
+    /**
+     * Test that a user who only listened is reported as holding data in the activity.
+     *
+     * Regression test: both discovery methods looked only at episode authorship, so a listener was
+     * invisible to a data request even though their counters were kept and their userid declared
+     * in the metadata.
+     */
+    public function test_a_listener_is_discoverable(): void {
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        [$viewer] = $this->seed_views();
+
+        $contextlist = provider::get_contexts_for_userid($viewer->id);
+        $this->assertCount(1, $contextlist);
+        $this->assertEquals($context->id, $contextlist->current()->id);
+
+        $userlist = new \core_privacy\local\request\userlist($context, 'mod_pcast');
+        provider::get_users_in_context($userlist);
+        $this->assertContains((int) $viewer->id, $userlist->get_userids());
+    }
+
+    /**
+     * Test that a user's own view counters are exported.
+     *
+     * Regression test: the counters were declared in the metadata but never exported, and a user
+     * who had only listened received an empty export.
+     */
+    public function test_export_includes_the_users_own_views(): void {
+        $cm = get_coursemodule_from_instance('pcast', $this->pcast->id);
+        $context = \context_module::instance($cm->id);
+        [$viewer] = $this->seed_views();
+
+        $writer = \core_privacy\local\request\writer::with_context($context);
+        $contextlist = new \core_privacy\local\request\approved_contextlist($viewer, 'mod_pcast', [$context->id]);
+        provider::export_user_data($contextlist);
+
+        $this->assertTrue($writer->has_any_data(), 'A listener should receive an export.');
+        $data = $writer->get_data([]);
+
+        // The viewer's own counters are 5 and 7; the student's on the same episodes are 2 and 3.
+        $this->assertCount(2, $data->episodes);
+        $exported = array_column($data->episodes, 'views', 'name');
+        $this->assertEquals(['Episode 1' => 5, 'Second episode' => 7], $exported);
     }
 
     /**

@@ -115,7 +115,7 @@ class mod_pcast_mod_form extends moodleform_mod {
             $sortorder[1] = get_string('createdesc', 'pcast');
             $mform->addElement('select', 'rsssortorder', get_string('rsssortorder', 'pcast'), $sortorder);
             $mform->addHelpButton('rsssortorder', 'rsssortorder', 'pcast');
-            $mform->setDefault('rsssortorder', 2);
+            $mform->setDefault('rsssortorder', 0);
             $mform->disabledIf('rsssortorder', 'enablerssfeed', 'eq', 0);
         }
 
@@ -163,8 +163,8 @@ class mod_pcast_mod_form extends moodleform_mod {
 
             // Content.
             $explicit = [];
-            $explicit[0]  = get_string('yes');
-            $explicit[1]  = get_string('no');
+            $explicit[0]  = get_string('no');
+            $explicit[1]  = get_string('yes');
             $explicit[2]  = get_string('clean', 'pcast');
             $mform->addElement('select', 'explicit', get_string('explicit', 'pcast'), $explicit);
             $mform->addHelpButton('explicit', 'explicit', 'pcast');
@@ -272,7 +272,7 @@ class mod_pcast_mod_form extends moodleform_mod {
 
         if ($this->current->instance) {
             // Editing existing instance - copy existing files into draft area.
-            $draftitemid = file_get_submitted_draft_itemid('id');
+            $draftitemid = file_get_submitted_draft_itemid('image');
             file_prepare_draft_area($draftitemid, $this->context->id, 'mod_pcast', 'logo', 0, ['subdirs' => false]);
             $defaultvalues['image'] = $draftitemid;
 

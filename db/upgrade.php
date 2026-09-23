@@ -203,6 +203,49 @@ function xmldb_pcast_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2018030501, 'pcast');
     }
 
+    if ($oldversion < 2026092000) {
+        // Upgrade step 2016060300 changed pcast_episodes.summary to text, but install.xml was never
+        // updated to match. Any site installed fresh since then still has char(255) and cannot store
+        // a summary longer than 255 characters. Bring those sites into line.
+        $table = new xmldb_table('pcast_episodes');
+        $field = new xmldb_field('summary', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null, 'name');
+        $dbman->change_field_type($table, $field);
+
+        // Pcast savepoint reached.
+        upgrade_mod_savepoint(true, 2026092000, 'pcast');
+    }
+
+    if ($oldversion < 2026092002) {
+        // The pcast_episodes table had no index beyond its primary key, although every listing and
+        // cleanup query filters on pcastid, and several also filter on userid.
+        $table = new xmldb_table('pcast_episodes');
+
+        $index = new xmldb_index('pcastid', XMLDB_INDEX_NOTUNIQUE, ['pcastid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        $index = new xmldb_index('userid', XMLDB_INDEX_NOTUNIQUE, ['userid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Pcast savepoint reached.
+        upgrade_mod_savepoint(true, 2026092002, 'pcast');
+    }
+
+    if ($oldversion < 2026092003) {
+        // The explicit content select used to label 0 as 'Yes' and 1 as 'No', while the feed
+        // publishes 0 as 'no' and 1 as 'yes'. Since 0 is also the column default, a stored 1 can
+        // only have come from a teacher choosing 'No', yet it published 'yes'. Now that the labels
+        // match the feed, those rows are corrected to 0 so the original choice is honoured.
+        $DB->set_field('pcast', 'explicit', 0, ['explicit' => 1]);
+        $DB->set_field('pcast_episodes', 'explicit', 0, ['explicit' => 1]);
+
+        // Pcast savepoint reached.
+        upgrade_mod_savepoint(true, 2026092003, 'pcast');
+    }
+
     // Final return of upgrade result (true/false) to Moodle. Must be always the last line in the script.
     return true;
 }

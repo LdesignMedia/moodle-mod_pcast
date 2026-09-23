@@ -190,17 +190,16 @@ class standard_action_bar implements renderable, templatable {
             }
         }
 
-        if ($mode == PCAST_STANDARD_VIEW) {
-            $active = $stdbaseurl->out(false);
-        } else if ($mode == PCAST_CATEGORY_VIEW) {
-            $active = $catbaseurl->out(false);
-        } else if ($mode == PCAST_DATE_VIEW) {
+        if ($mode == PCAST_DATE_VIEW) {
             $active = $datebaseurl->out(false);
         } else if ($mode == PCAST_AUTHOR_VIEW) {
             $active = $authorbaseurl->out(false);
-        } else if ($mode == PCAST_APPROVAL_VIEW) {
+        } else if ($mode == PCAST_CATEGORY_VIEW && isset($catbaseurl)) {
+            $active = $catbaseurl->out(false);
+        } else if ($mode == PCAST_APPROVAL_VIEW && isset($approvebaseurl)) {
             $active = $approvebaseurl->out(false);
         } else {
+            // The standard view, and any mode whose tab is not available to this user.
             $active = $stdbaseurl->out(false);
         }
 

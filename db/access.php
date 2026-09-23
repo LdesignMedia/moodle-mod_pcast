@@ -83,7 +83,7 @@ $capabilities = [
     ],
 
     'mod/pcast:manage' => [
-        'riskbitmask' => RISK_SPAM,
+        'riskbitmask' => RISK_SPAM | RISK_XSS,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [

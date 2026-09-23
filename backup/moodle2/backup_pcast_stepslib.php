@@ -34,9 +34,9 @@ class backup_pcast_activity_structure_step extends backup_activity_structure_ste
         // Define each element separated.
         $pcast = new backup_nested_element('pcast', ['id'], [
             'userid', 'name', 'intro', 'introformat', 'userscancomment',
-            'userscancategorize', 'userscanpost', 'maxbytes', 'requireapproval', 'displayauthor',
-            'displayviews', 'image', 'imageheight', 'imagewidth', 'rssepisodes',
-            'rsssortorder', 'enablerssfeed', 'enableitunes', 'visible', 'explicit',
+            'userscancategorize', 'userscanpost', 'maxbytes', 'episodesperpage', 'requireapproval',
+            'displayauthor', 'displayviews', 'image', 'imageheight', 'imagewidth', 'rssepisodes',
+            'rsssortorder', 'enablerssfeed', 'enablerssitunes', 'visible', 'explicit',
             'subtitle', 'keywords', 'topcategory', 'nestedcategory', 'assessed',
             'assesstimestart', 'assesstimefinish', 'scale', 'timecreated', 'timemodified',
             'completionepisodes', 'allowedfiletypes', ]);
@@ -122,6 +122,7 @@ class backup_pcast_activity_structure_step extends backup_activity_structure_ste
         // Define id annotations.
 
         $pcast->annotate_ids('user', 'userid');
+        $pcast->annotate_ids('scale', 'scale');
         $episode->annotate_ids('user', 'userid');
         $view->annotate_ids('user', 'userid');
 
@@ -134,6 +135,7 @@ class backup_pcast_activity_structure_step extends backup_activity_structure_ste
         $pcast->annotate_files('mod_pcast', 'logo', null);
 
         $episode->annotate_files('mod_pcast', 'episode', 'id');
+        $episode->annotate_files('mod_pcast', 'summary', 'id');
 
         // Return the root element (pcast), wrapped into standard activity structure.
         return $this->prepare_activity_structure($pcast);

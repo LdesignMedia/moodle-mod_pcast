@@ -88,6 +88,8 @@ class provider implements
             [
                 'userid' => 'privacy:metadata:pcast_views:userid',
                 'episodeid' => 'privacy:metadata:pcast_views:episodeid',
+                'views' => 'privacy:metadata:pcast_views:views',
+                'lastview' => 'privacy:metadata:pcast_views:lastview',
             ],
             'privacy:metadata:pcast_views'
         );
@@ -115,14 +117,17 @@ class provider implements
             INNER JOIN {pcast} p ON p.id = cm.instance
             INNER JOIN {pcast_episodes} pe ON pe.pcastid = p.id
              LEFT JOIN {comments} com ON com.commentarea =:commentarea AND com.itemid = pe.id
+             LEFT JOIN {pcast_views} pv ON pv.episodeid = pe.id AND pv.userid = :viewuserid
             {$ratingquery->join}
-                 WHERE pe.userid = :pcastepisodeuserid OR com.userid = :commentuserid OR {$ratingquery->userwhere}";
+                 WHERE pe.userid = :pcastepisodeuserid OR com.userid = :commentuserid
+                       OR pv.id IS NOT NULL OR {$ratingquery->userwhere}";
         $params = [
             'contextlevel' => CONTEXT_MODULE,
             'modname' => 'pcast',
             'commentarea' => 'pcast_episode',
             'pcastepisodeuserid' => $userid,
             'commentuserid' => $userid,
+            'viewuserid' => $userid,
         ] + $ratingquery->params;
 
         $contextlist = new contextlist();
@@ -151,6 +156,24 @@ class provider implements
                   JOIN {modules} m ON m.id = cm.module AND m.name = :modname
                   JOIN {pcast} p ON p.id = cm.instance
                   JOIN {pcast_episodes} pe ON pe.pcastid = p.id
+                 WHERE c.id = :contextid";
+
+        $params = [
+            'contextid' => $context->id,
+            'contextlevel' => CONTEXT_MODULE,
+            'modname' => 'pcast',
+        ];
+
+        $userlist->add_from_sql('userid', $sql, $params);
+
+        // Find users who viewed an episode. A view row belongs to the viewer, not to the episode author.
+        $sql = "SELECT pv.userid
+                  FROM {context} c
+                  JOIN {course_modules} cm ON cm.id = c.instanceid AND c.contextlevel = :contextlevel
+                  JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                  JOIN {pcast} p ON p.id = cm.instance
+                  JOIN {pcast_episodes} pe ON pe.pcastid = p.id
+                  JOIN {pcast_views} pv ON pv.episodeid = pe.id
                  WHERE c.id = :contextid";
 
         $params = [
@@ -211,24 +234,33 @@ class provider implements
                        pe.subtitle,
                        pe.keywords,
                        pe.timecreated,
-                       pe.timemodified
+                       pe.timemodified,
+                       pv.id AS viewrowid,
+                       pv.views,
+                       pv.lastview
                   FROM {pcast_episodes} pe
                   JOIN {pcast} p ON pe.pcastid = p.id
-                  JOIN {course_modules} cm ON p.id = cm.instance
-                  JOIN {context} c ON cm.id = c.instanceid
+                  JOIN {modules} m ON m.name = :modname
+                  JOIN {course_modules} cm ON p.id = cm.instance AND cm.module = m.id
+                  JOIN {context} c ON cm.id = c.instanceid AND c.contextlevel = :contextlevel
+             LEFT JOIN {pcast_views} pv ON pv.episodeid = pe.id AND pv.userid = :viewuserid
                  WHERE c.id {$contextsql}
-                   AND pe.userid = :userid
-             OR EXISTS (SELECT 1 FROM {comments} com WHERE com.commentarea = :commentarea AND com.itemid = pe.id
-                        AND com.userid = :commentuserid)
-             OR EXISTS (SELECT 1 FROM {rating} r WHERE r.contextid = c.id AND r.itemid  = pe.id
-                        AND r.component = :ratingcomponent
-                   AND r.ratingarea = :ratingarea
-                   AND r.userid = :ratinguserid)
+                   AND (pe.userid = :userid
+                        OR pv.id IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM {comments} com WHERE com.commentarea = :commentarea
+                                   AND com.itemid = pe.id AND com.userid = :commentuserid)
+                        OR EXISTS (SELECT 1 FROM {rating} r WHERE r.contextid = c.id AND r.itemid = pe.id
+                                   AND r.component = :ratingcomponent
+                                   AND r.ratingarea = :ratingarea
+                                   AND r.userid = :ratinguserid))
                ORDER BY pe.id, cm.id";
         $params = [
+            'modname' => 'pcast',
+            'contextlevel' => CONTEXT_MODULE,
             'userid' => $user->id,
             'commentarea' => 'pcast_episode',
             'commentuserid' => $user->id,
+            'viewuserid' => $user->id,
             'ratingcomponent' => 'mod_pcast',
             'ratingarea' => 'episode',
             'ratinguserid' => $user->id,
@@ -263,7 +295,7 @@ class provider implements
                 writer::with_context($context)->rewrite_pluginfile_urls(
                     $path,
                     'mod_pcast',
-                    'episode',
+                    'summary',
                     $record->episodeid,
                     $record->summary
                 ),
@@ -276,7 +308,7 @@ class provider implements
                 writer::with_context($context)->export_area_files($path, 'mod_pcast', 'episode', $record->episodeid);
 
                 // Get all files attached to the pcast attachment.
-                writer::with_context($context)->export_area_files($path, 'mod_pcast', 'mediafile', $record->episodeid);
+                writer::with_context($context)->export_area_files($path, 'mod_pcast', 'summary', $record->episodeid);
             }
 
             // Export associated comments.
@@ -311,12 +343,20 @@ class provider implements
                 $record->userid != $user->id
             );
 
-            $pcastdata['episodes'][] = [
+            $episodedata = [
                 'name'       => $record->name,
                 'summary'    => $summary,
                 'timecreated'   => \core_privacy\local\request\transform::datetime($record->timecreated),
                 'timemodified'  => \core_privacy\local\request\transform::datetime($record->timemodified),
             ];
+
+            // A view row belongs to the viewer, so only this user's own counter is exported.
+            if (!is_null($record->viewrowid)) {
+                $episodedata['views'] = $record->views;
+                $episodedata['lastview'] = \core_privacy\local\request\transform::datetime($record->lastview);
+            }
+
+            $pcastdata['episodes'][] = $episodedata;
         }
         $pcastepisodes->close();
 
@@ -335,7 +375,12 @@ class provider implements
      * @param array $subcontext The location within the current context that this data belongs.
      * @param \stdClass $user the user record
      */
-    protected static function export_pcast_data_for_user(array $pcastdata, \context_module $context, array $subcontext, \stdClass $user) {
+    protected static function export_pcast_data_for_user(
+        array $pcastdata,
+        \context_module $context,
+        array $subcontext,
+        \stdClass $user
+    ) {
         // Fetch the generic module data for the pcast.
         $contextdata = helper::get_context_data($context, $user);
         // Merge with pcast data and write it.
@@ -360,13 +405,8 @@ class provider implements
             return;
         }
 
-        $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-        $DB->record_exists('pcast', ['id' => $context->instanceid]);
-        $DB->delete_records('pcast_episodes', ['pcastid' => $instanceid]);
-
         if ($context->contextlevel == CONTEXT_MODULE) {
             $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-            $DB->record_exists('pcast', ['id' => $context->instanceid]);
 
             $episodes = $DB->get_records('pcast_episodes', ['pcastid' => $instanceid]);
             foreach ($episodes as $episode) {
@@ -376,7 +416,7 @@ class provider implements
 
             // Delete episode and attachment files.
             get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'episode');
-            get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'mediafile');
+            get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'summary');
 
             // Delete related ratings.
             \core_rating\privacy\provider::delete_ratings($context, 'mod_pcast', 'episode');
@@ -408,19 +448,31 @@ class provider implements
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel == CONTEXT_MODULE) {
                 $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid], MUST_EXIST);
-                $DB->record_exists('pcast', ['id' => $context->instanceid]);
+
+                // Delete this user's own view counters, wherever in this activity they were recorded.
+                // A view row belongs to the viewer, so deleting by episode alone erased other people's rows
+                // and left this user's views on other people's episodes behind.
+                $DB->delete_records_select(
+                    'pcast_views',
+                    "userid = :userid AND episodeid IN (SELECT id FROM {pcast_episodes} WHERE pcastid = :pcastid)",
+                    ['userid' => $userid, 'pcastid' => $instanceid]
+                );
 
                 $episodes = $DB->get_records('pcast_episodes', ['pcastid' => $instanceid, 'userid' => $userid]);
                 foreach ($episodes as $episode) {
-                    // Delete related episode views.
+                    // The episode itself is deleted below, so everything hanging off it goes with it.
                     $DB->delete_records('pcast_views', ['episodeid' => $episode->id]);
+                    $DB->delete_records(
+                        'comments',
+                        ['itemid' => $episode->id, 'commentarea' => 'pcast_episode', 'contextid' => $context->id]
+                    );
 
                     // Delete tags.
                     \core_tag\privacy\provider::delete_item_tags($context, 'mod_pcast', 'pcast_episodes', $episode->id);
 
                     // Delete episode and attachment files.
                     get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'episode', $episode->id);
-                    get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'mediafile', $episode->id);
+                    get_file_storage()->delete_area_files($context->id, 'mod_pcast', 'summary', $episode->id);
 
                     // Delete related ratings.
                     \core_rating\privacy\provider::delete_ratings($context, 'mod_pcast', 'episode', $episode->id);
@@ -459,30 +511,38 @@ class provider implements
 
         $episodesobject->close();
 
+        // Delete these users' own view counters. A view row belongs to the viewer, so deleting by episode
+        // alone erased other people's rows and left these users' views on other people's episodes behind.
+        $viewswhere = "userid {$userinsql} AND episodeid IN (SELECT id FROM {pcast_episodes} WHERE pcastid = :instanceid)";
+        $DB->delete_records_select('pcast_views', $viewswhere, $userinstanceparams);
+
+        // Delete comments. These exist independently of the episodes these users authored.
+        \core_comment\privacy\provider::delete_comments_for_users($userlist, 'mod_pcast', 'pcast_episode');
+
         if (!$episodes) {
             return;
         }
 
         [$insql, $inparams] = $DB->get_in_or_equal($episodes, SQL_PARAMS_NAMED);
 
-        // Delete related episode views.
+        // The episodes themselves are deleted below, so everything hanging off them goes with them.
         $DB->delete_records_list('pcast_views', 'episodeid', $episodes);
-
-        // Delete related episode categories.
-        $DB->delete_records_list('pcast_episodes_categories', 'episodeid', $episodes);
+        $commentswhere = "contextid = :contextid AND commentarea = :commentarea AND itemid {$insql}";
+        $DB->delete_records_select(
+            'comments',
+            $commentswhere,
+            $inparams + ['contextid' => $context->id, 'commentarea' => 'pcast_episode']
+        );
 
         // Delete related episode and attachment files.
         get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'episode', $insql, $inparams);
-        get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'mediafile', $insql, $inparams);
+        get_file_storage()->delete_area_files_select($context->id, 'mod_pcast', 'summary', $insql, $inparams);
 
         // Delete user tags related to this pcast.
         \core_tag\privacy\provider::delete_item_tags_select($context, 'mod_pcast', 'pcast_episodes', $insql, $inparams);
 
         // Delete related ratings.
         \core_rating\privacy\provider::delete_ratings_select($context, 'mod_pcast', 'episode', $insql, $inparams);
-
-        // Delete comments.
-        \core_comment\privacy\provider::delete_comments_for_users($userlist, 'mod_pcast', 'pcast_episode');
 
         // Now delete all user related episodes.
         $deletewhere = "pcastid = :instanceid AND userid {$userinsql}";
